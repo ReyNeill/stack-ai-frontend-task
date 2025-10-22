@@ -1033,12 +1033,11 @@ export function FilePicker() {
                 )}
               </div>
             ) : (
-              <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-                <div className="flex-1 overflow-y-auto scrollbar-hide">
-                  <div className="px-5 pt-3 pb-3">
-                    <Table containerClassName="overflow-y-visible">
-                      <TableHeader className="sticky top-0 z-20 bg-white shadow-[0_1px_0_0_rgba(148,163,184,0.4)] [&>tr]:bg-white [&>tr>th]:sticky [&>tr>th]:top-0 [&>tr>th]:bg-white">
-                        <TableRow className="hover:bg-transparent">
+              <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide px-5">
+                {/* apparently had to hack around shadcn to make the header stick */}
+                <Table containerClassName="overflow-visible">
+                  <TableHeader className="sticky top-0 z-30 bg-white shadow-[0_1px_0_0_rgba(148,163,184,0.4)] pt-3 pb-2 [&>tr]:bg-transparent [&>tr>th]:sticky [&>tr>th]:top-0 [&>tr>th]:bg-white [&>tr>th]:z-20">
+                    <TableRow className="hover:bg-transparent">
                           <TableHead className="w-12">
                             <TooltipProvider>
                               <Tooltip>
@@ -1261,10 +1260,8 @@ export function FilePicker() {
                                 </TableCell>
                               </TableRow>
                             )}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </div>
+                    </TableBody>
+                  </Table>
               </div>
             )}
             {selectedIntegration === 'google-drive' && breadcrumbs.length > 1 && (
