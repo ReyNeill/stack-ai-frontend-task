@@ -138,6 +138,9 @@ const INTEGRATIONS: IntegrationItem[] = [
   { id: 'slack', label: 'Slack', type: 'image', src: '/icons/Slack.svg' },
 ];
 
+const PREFETCH_TOAST_CACHE = new Set<string>();
+const PREFETCH_COMPLETED_CACHE = new Set<string>();
+
 function createStubStackResource(params: {
   id: string;
   fullPath: string;
@@ -306,37 +309,99 @@ interface PrefetchHiddenQueriesProps {
   connectionId?: string;
   knowledgeBaseId?: string;
   resource: ParsedResource;
+  onSettled: () => void;
 }
 
 function PrefetchHiddenQueries({
   connectionId,
   knowledgeBaseId,
   resource,
+  onSettled,
 }: PrefetchHiddenQueriesProps) {
+  const queryClient = useQueryClient();
   const isDirectory = resource.type === 'directory';
   const knowledgeBasePath = resourcePathToKnowledgeBasePath(resource.fullPath);
 
-  useQuery<ListConnectionResourcesResponse>({
-    queryKey: ['connection-resources', connectionId, resource.id],
-    queryFn: () =>
-      apiGet(
-        `/api/stack/connections/${connectionId}/resources${resource.id ? `?resourceId=${resource.id}` : ''}`
-      ),
-    enabled: Boolean(connectionId && isDirectory),
-    staleTime: 120_000,
-  });
+  useEffect(() => {
+    if (!connectionId || !isDirectory) {
+      return;
+    }
 
-  useQuery<ListKnowledgeBaseResourcesResponse>({
-    queryKey: ['knowledge-base-resources', knowledgeBaseId, knowledgeBasePath],
-    queryFn: () =>
-      apiGet(
-        `/api/stack/knowledge-bases/${knowledgeBaseId}/resources?resourcePath=${encodeURIComponent(knowledgeBasePath)}`
-      ),
-    enabled: Boolean(knowledgeBaseId && isDirectory),
-    staleTime: 120_000,
-  });
+    const connectionKey: [string, string, string | undefined] = [
+      'connection-resources',
+      connectionId,
+      resource.id,
+    ];
 
-  return <div className="hidden" aria-hidden />;
+    const toastKey = `${connectionId}:${knowledgeBaseId ?? 'none'}:${resource.id}`;
+
+    let cancelled = false;
+
+    const run = async () => {
+      try {
+        await queryClient.prefetchQuery({
+          queryKey: connectionKey,
+          queryFn: () =>
+            apiGet<ListConnectionResourcesResponse>(
+              `/api/stack/connections/${connectionId}/resources${resource.id ? `?resourceId=${resource.id}` : ''}`
+            ),
+          staleTime: 120_000,
+        });
+
+        if (knowledgeBaseId) {
+          const knowledgeKey: [string, string, string] = [
+            'knowledge-base-resources',
+            knowledgeBaseId,
+            knowledgeBasePath,
+          ];
+
+          await queryClient.prefetchQuery({
+            queryKey: knowledgeKey,
+            queryFn: () =>
+              apiGet<ListKnowledgeBaseResourcesResponse>(
+                `/api/stack/knowledge-bases/${knowledgeBaseId}/resources?resourcePath=${encodeURIComponent(knowledgeBasePath)}`
+              ),
+            staleTime: 120_000,
+          });
+        }
+
+        if (!cancelled && PREFETCH_TOAST_CACHE.has(toastKey) && !PREFETCH_COMPLETED_CACHE.has(toastKey)) {
+          PREFETCH_COMPLETED_CACHE.add(toastKey);
+          toast.success(`“${resource.name}” is ready to open.`, {
+            id: toastKey,
+          });
+        }
+      } catch {
+        if (!cancelled && PREFETCH_TOAST_CACHE.has(toastKey) && !PREFETCH_COMPLETED_CACHE.has(toastKey)) {
+          toast.error(`Failed to preload “${resource.name}”.`, {
+            id: toastKey,
+          });
+        }
+      } finally {
+        if (!cancelled) {
+          onSettled();
+        }
+      }
+    };
+
+    void run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    connectionId,
+    knowledgeBaseId,
+    knowledgeBasePath,
+    isDirectory,
+    queryClient,
+    resource.fullPath,
+    resource.id,
+    resource.name,
+    onSettled,
+  ]);
+
+  return null;
 }
 
 export function FilePicker() {
@@ -360,6 +425,27 @@ export function FilePicker() {
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [loadingResourceId, setLoadingResourceId] = useState<string | null>(null);
   const [prefetchResource, setPrefetchResource] = useState<ParsedResource | null>(null);
+
+  const startPrefetch = (resource: ParsedResource) => {
+    if (resource.type !== 'directory' || selectedIntegration !== 'google-drive') {
+      return;
+    }
+
+    if (!activeConnectionId) {
+      return;
+    }
+
+    const toastKey = `${activeConnectionId}:${activeKnowledgeBaseId ?? 'none'}:${resource.id}`;
+
+    if (!PREFETCH_TOAST_CACHE.has(toastKey)) {
+      PREFETCH_TOAST_CACHE.add(toastKey);
+      toast.info(`Preloading “${resource.name}” in the background…`, {
+        id: toastKey,
+      });
+    }
+
+    setPrefetchResource((prev) => (prev?.id === resource.id ? prev : resource));
+  };
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -497,12 +583,16 @@ export function FilePicker() {
   const handleEnterDirectory = (resource: ParsedResource) => {
     if (resource.type !== 'directory') return;
 
+    const normalizedPath = resource.fullPath.endsWith('/')
+      ? resource.fullPath
+      : `${resource.fullPath}/`;
+
     setBreadcrumbs((prev) => [
       ...prev,
       {
         label: resource.name,
         resourceId: resource.id,
-        resourcePath: resource.fullPath,
+        resourcePath: normalizedPath,
       },
     ]);
   };
@@ -1021,14 +1111,6 @@ export function FilePicker() {
                                 : baseActionLabel;
                             const shouldShowCardNameTooltip = displayName.length > 32;
 
-                            const handlePrefetch = () => {
-                              if (isDirectory && selectedIntegration === 'google-drive') {
-                                setPrefetchResource((prev) =>
-                                  prev?.id === resource.id ? prev : resource
-                                );
-                              }
-                            };
-
                             return (
                               <div
                                 key={resource.id}
@@ -1038,8 +1120,6 @@ export function FilePicker() {
                                     ? 'border-slate-400 bg-slate-50'
                                     : 'border-slate-200/70 hover:border-slate-300'
                                 )}
-                                onMouseEnter={handlePrefetch}
-                                onFocus={handlePrefetch}
                                 onClick={() => {
                                   if (resource.type === 'directory') {
                                     handleEnterDirectory(resource);
@@ -1087,7 +1167,11 @@ export function FilePicker() {
                                     <TooltipProvider>
                                       <Tooltip>
                                         <TooltipTrigger asChild>
-                                          <p className="text-xs font-medium text-slate-700 truncate mb-1 group-hover:underline">
+                                          <p
+                                            className="text-xs font-medium text-slate-700 truncate mb-1 group-hover:underline"
+                                            onMouseEnter={() => startPrefetch(resource)}
+                                            onFocus={() => startPrefetch(resource)}
+                                          >
                                             {displayName}
                                           </p>
                                         </TooltipTrigger>
@@ -1099,7 +1183,11 @@ export function FilePicker() {
                                       </Tooltip>
                                     </TooltipProvider>
                                   ) : (
-                                    <p className="text-xs font-medium text-slate-700 truncate mb-1 group-hover:underline">
+                                    <p
+                                      className="text-xs font-medium text-slate-700 truncate mb-1 group-hover:underline"
+                                      onMouseEnter={() => startPrefetch(resource)}
+                                      onFocus={() => startPrefetch(resource)}
+                                    >
                                       {displayName}
                                     </p>
                                   )}
@@ -1280,6 +1368,8 @@ export function FilePicker() {
                                     e.stopPropagation();
                                     handleEnterDirectory(resource);
                                   }}
+                                  onMouseEnter={() => startPrefetch(resource)}
+                                  onFocus={() => startPrefetch(resource)}
                                   className={cn(
                                     'text-sm font-medium text-slate-900 truncate block text-left group-hover:underline',
                                     nameWidthClasses
@@ -1323,20 +1413,6 @@ export function FilePicker() {
                                     'group cursor-pointer',
                                     isSelected ? 'bg-slate-50' : 'hover:bg-slate-100'
                                   )}
-                                  onMouseEnter={() => {
-                                    if (isDirectory && selectedIntegration === 'google-drive') {
-                                      setPrefetchResource((prev) =>
-                                        prev?.id === resource.id ? prev : resource
-                                      );
-                                    }
-                                  }}
-                                  onFocus={() => {
-                                    if (isDirectory && selectedIntegration === 'google-drive') {
-                                      setPrefetchResource((prev) =>
-                                        prev?.id === resource.id ? prev : resource
-                                      );
-                                    }
-                                  }}
                                   onClick={(e) => {
                                     if ((e.target as HTMLElement).closest('button')) {
                                       return;
@@ -1526,13 +1602,13 @@ export function FilePicker() {
       </main>
       {selectedIntegration === 'google-drive' &&
         prefetchResource &&
-        activeConnectionId &&
-        activeKnowledgeBaseId && (
-          <Activity mode="hidden">
+        activeConnectionId && (
+          <Activity mode="visible">
             <PrefetchHiddenQueries
               connectionId={activeConnectionId}
               knowledgeBaseId={activeKnowledgeBaseId}
               resource={prefetchResource}
+              onSettled={() => setPrefetchResource(null)}
             />
           </Activity>
         )}

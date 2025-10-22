@@ -30,6 +30,34 @@ function computeStatus(
       return { status: mappedStatus, kbEntry: match };
     }
 
+    const directoryPath = resource.inode_path.path.endsWith('/')
+      ? resource.inode_path.path
+      : `${resource.inode_path.path}/`;
+
+    const descendantEntries = knowledgeBaseData.data.filter((item) =>
+      item.inode_path.path.startsWith(directoryPath)
+    );
+
+    if (descendantEntries.length === 0) {
+      return { status: 'not_indexed' };
+    }
+
+    const aggregatedStatuses = descendantEntries.map((entry) =>
+      mapKnowledgeBaseStatus(entry.status)
+    );
+
+    if (aggregatedStatuses.includes('error')) {
+      return { status: 'error' };
+    }
+
+    if (aggregatedStatuses.includes('processing') || aggregatedStatuses.includes('pending')) {
+      return { status: 'processing' };
+    }
+
+    if (aggregatedStatuses.includes('indexed')) {
+      return { status: 'indexed' };
+    }
+
     return { status: 'not_indexed' };
   }
 
@@ -63,7 +91,11 @@ export function toParsedResources(
   knowledgeBaseData?: ListKnowledgeBaseResourcesResponse
 ): ParsedResource[] {
   return resources.map((resource) => {
-    const fullPath = resource.inode_path.path;
+    const rawPath = resource.inode_path.path;
+    const fullPath =
+      resource.inode_type === 'directory' && rawPath && !rawPath.endsWith('/')
+        ? `${rawPath}/`
+        : rawPath;
     const { status, kbEntry } = computeStatus(resource, knowledgeBaseData);
 
     return {
@@ -87,7 +119,9 @@ export function pruneSelectionsAgainst(selected: ParsedResource[], candidate: Pa
     return selected;
   }
 
-  const prefix = `${candidate.fullPath}/`;
+  const prefix = candidate.fullPath.endsWith('/')
+    ? candidate.fullPath
+    : `${candidate.fullPath}/`;
   return selected.filter((item) => !item.fullPath.startsWith(prefix));
 }
 
