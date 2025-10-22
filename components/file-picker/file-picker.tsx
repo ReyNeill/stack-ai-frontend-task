@@ -4,17 +4,15 @@ import Image from 'next/image';
 import { useMemo, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
-  AppWindow,
   ArrowRightToLine,
   Calendar,
-  Cloud,
   FileText,
   Folder,
   Globe,
   Grid3x3,
   Layers,
   List,
-  MessageSquare,
+  Loader2,
   RefreshCcw,
   Search,
   Share2,
@@ -243,6 +241,7 @@ export function FilePicker() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [selectedIntegration, setSelectedIntegration] = useState<string>('google-drive');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [loadingResourceId, setLoadingResourceId] = useState<string | null>(null);
 
   const connectionsQuery = useQuery<ListConnectionsResponse>({
     queryKey: ['connections'],
@@ -390,6 +389,10 @@ export function FilePicker() {
     },
     onMutate: async (variables) => {
       const { resourceIds } = variables;
+      // Set loading state for single resource operations
+      if (resourceIds.length === 1) {
+        setLoadingResourceId(resourceIds[0]);
+      }
 
       await queryClient.cancelQueries({
         queryKey: ['knowledge-base-resources', activeKnowledgeBaseId, knowledgeBasePath],
@@ -452,6 +455,9 @@ export function FilePicker() {
         queryKey: ['knowledge-base-resources', activeKnowledgeBaseId],
       });
     },
+    onSettled: () => {
+      setLoadingResourceId(null);
+    },
   });
 
   const deleteMutation = useMutation({
@@ -465,6 +471,8 @@ export function FilePicker() {
       );
     },
     onMutate: async (resource) => {
+      setLoadingResourceId(resource.id);
+      
       await queryClient.cancelQueries({
         queryKey: ['knowledge-base-resources', activeKnowledgeBaseId, knowledgeBasePath],
       });
@@ -507,6 +515,9 @@ export function FilePicker() {
         queryKey: ['knowledge-base-resources', activeKnowledgeBaseId],
       });
     },
+    onSettled: () => {
+      setLoadingResourceId(null);
+    },
   });
 
   const handleIndexSelected = () => {
@@ -530,6 +541,12 @@ export function FilePicker() {
   const handleRowAction = (resource: ParsedResource) => {
     if (resource.type === 'directory') {
       handleEnterDirectory(resource);
+      return;
+    }
+
+    // Prevent API calls for sample local files
+    if (selectedIntegration === 'files') {
+      toast.error('Indexing local files is not yet supported');
       return;
     }
 
@@ -843,14 +860,6 @@ export function FilePicker() {
                       className="pl-9 h-8 w-64 text-xs"
                     />
                   </div>
-                  <Button
-                    onClick={handleIndexSelected}
-                    disabled={selectionCount === 0 || indexMutation.isPending}
-                    size="sm"
-                    className="h-8 text-xs"
-                  >
-                    Index selected ({selectionCount})
-                  </Button>
                 </div>
               </div>
 
@@ -932,15 +941,23 @@ export function FilePicker() {
                                 }}
                                 disabled={
                                   (resource.type === 'directory' && resource.status === 'processing') ||
-                                  indexMutation.isPending ||
-                                  deleteMutation.isPending
+                                  loadingResourceId === resource.id
                                 }
                               >
-                                {resource.type === 'directory'
-                                  ? 'Open'
-                                  : canDelete
-                                  ? 'De-index'
-                                  : 'Index'}
+                                {loadingResourceId === resource.id ? (
+                                  <>
+                                    <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                                    {canDelete ? 'De-indexing...' : 'Indexing...'}
+                                  </>
+                                ) : (
+                                  <>
+                                    {resource.type === 'directory'
+                                      ? 'Open'
+                                      : canDelete
+                                      ? 'De-index'
+                                      : 'Index'}
+                                  </>
+                                )}
                               </Button>
                             </div>
                           );
@@ -1067,15 +1084,23 @@ export function FilePicker() {
                                   onClick={() => handleRowAction(resource)}
                                   disabled={
                                     (resource.type === 'directory' && resource.status === 'processing') ||
-                                    indexMutation.isPending ||
-                                    deleteMutation.isPending
+                                    loadingResourceId === resource.id
                                   }
                                 >
-                                  {resource.type === 'directory'
-                                    ? 'Open'
-                                    : canDelete
-                                    ? 'De-index'
-                                    : 'Index'}
+                                  {loadingResourceId === resource.id ? (
+                                    <>
+                                      <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                                      {canDelete ? 'De-indexing...' : 'Indexing...'}
+                                    </>
+                                  ) : (
+                                    <>
+                                      {resource.type === 'directory'
+                                        ? 'Open'
+                                        : canDelete
+                                        ? 'De-index'
+                                        : 'Index'}
+                                    </>
+                                  )}
                                 </Button>
                               </TableCell>
                             </TableRow>
