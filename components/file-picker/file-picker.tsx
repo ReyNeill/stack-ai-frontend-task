@@ -865,7 +865,7 @@ export function FilePicker() {
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-slate-200/70 bg-white/70 shadow-sm flex-1 min-h-0 flex flex-col relative">
+              <div className="rounded-2xl border border-slate-200/70 bg-white/70 shadow-sm flex-1 min-h-0 flex flex-col relative overflow-hidden">
                 {viewMode === 'grid' ? (
                   <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide">
                     {isLoading ? (
@@ -1006,11 +1006,11 @@ export function FilePicker() {
             ) : (
               <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
                 <div className="flex-1 overflow-y-auto scrollbar-hide">
-                  <div className="px-5 py-3">
+                  <div className="px-5 pt-3 pb-3">
                     <Table>
-                      <TableHeader className="bg-white">
+                      <TableHeader>
                         <TableRow className="hover:bg-transparent">
-                          <TableHead className="w-12">
+                          <TableHead className="sticky top-0 z-20 bg-white w-12">
                             <TooltipProvider>
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -1029,19 +1029,19 @@ export function FilePicker() {
                               </Tooltip>
                             </TooltipProvider>
                           </TableHead>
-                          <TableHead>
+                          <TableHead className="sticky top-0 z-20 bg-white">
                             <span className="text-xs font-medium text-slate-500">Name</span>
                           </TableHead>
-                          <TableHead>
+                          <TableHead className="sticky top-0 z-20 bg-white">
                             <span className="text-xs font-medium text-slate-500">Last modified</span>
                           </TableHead>
-                          <TableHead>
+                          <TableHead className="sticky top-0 z-20 bg-white">
                             <span className="text-xs font-medium text-slate-500">Size</span>
                           </TableHead>
-                          <TableHead>
+                          <TableHead className="sticky top-0 z-20 bg-white">
                             <span className="text-xs font-medium text-slate-500">Status</span>
                           </TableHead>
-                          <TableHead className="text-center">
+                          <TableHead className="sticky top-0 z-20 bg-white text-center">
                             <span className="text-xs font-medium text-slate-500">Action</span>
                           </TableHead>
                         </TableRow>
@@ -1198,7 +1198,7 @@ export function FilePicker() {
               </div>
             )}
             {selectedIntegration === 'google-drive' && breadcrumbs.length > 1 && (
-              <div className="border-t border-slate-200/70 bg-white/80 px-5 py-2.5 rounded-b-2xl">
+              <div className="border-t border-slate-200/70 bg-white/70 px-5 py-2.5 rounded-b-2xl">
                 <Breadcrumb>
                   <BreadcrumbList>
                     {breadcrumbs.map((crumb, index) => {
