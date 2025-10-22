@@ -472,8 +472,8 @@ export function FilePicker() {
     connectionResourcesQuery.isLoading;
 
   return (
-    <div className="relative flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center px-6 py-16">
-      <div className="relative z-10 w-full max-w-6xl overflow-hidden rounded-[32px] border border-white/60 bg-white/85 shadow-2xl backdrop-blur-xl">
+    <div className="flex min-h-screen flex-col items-center justify-center px-4 py-12">
+      <div className="w-full max-w-[min(1100px,calc(100vw-48px))] overflow-hidden rounded-[32px] border border-white/60 bg-white/85 shadow-2xl backdrop-blur-xl">
         <div className="flex">
           <aside className="hidden w-64 shrink-0 border-r border-slate-200/60 bg-slate-50/80 p-6 md:block">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
@@ -486,16 +486,17 @@ export function FilePicker() {
                   const Wrapper = item.type === 'icon' ? item.icon : null;
 
                   return (
-                    <div
+                    <button
                       key={item.id}
+                      type="button"
                       className={cn(
-                        'flex items-center justify-between rounded-xl px-3 py-2 text-sm transition hover:bg-white',
+                        'flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm transition hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300',
                         isActive
-                          ? 'bg-white shadow-sm ring-1 ring-slate-200'
-                          : 'text-slate-500'
+                          ? 'cursor-default bg-white shadow-sm ring-1 ring-slate-200'
+                          : 'cursor-pointer text-slate-500'
                       )}
                     >
-                      <div className="flex items-center gap-3">
+                      <span className="flex items-center gap-3">
                         {item.type === 'icon' && Wrapper ? (
                           <Wrapper className="h-4 w-4 text-slate-400" />
                         ) : (
@@ -508,11 +509,11 @@ export function FilePicker() {
                           />
                         )}
                         <span className="font-medium">{item.label}</span>
-                      </div>
+                      </span>
                       {item.count != null && (
                         <span className="text-xs text-slate-400">{item.count}</span>
                       )}
-                    </div>
+                    </button>
                   );
                 })}
               </div>
