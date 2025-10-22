@@ -86,7 +86,7 @@ export async function triggerKnowledgeBaseSync(
   // Try POST first, fall back to GET if that fails
   try {
     await stackPost(`/knowledge_bases/sync/trigger/${knowledgeBaseId}/${orgId}`);
-  } catch (postError) {
+  } catch {
     // If POST fails, try GET as shown in the documentation
     await stackGet(`/knowledge_bases/sync/trigger/${knowledgeBaseId}/${orgId}`);
   }

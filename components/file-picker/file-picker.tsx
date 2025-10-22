@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { useMemo, useState, Fragment, useEffect } from 'react';
+import { Activity, useMemo, useState, Fragment, useEffect } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
   Calendar,
@@ -9,14 +9,12 @@ import {
   Folder,
   Globe,
   Grid3x3,
-  Image as ImageIcon,
   Layers,
   List,
   Loader2,
   Play,
   RefreshCcw,
   Search,
-  Share2,
   SortAsc,
   Text,
 } from 'lucide-react';
@@ -29,6 +27,7 @@ import {
   ListConnectionsResponse,
   ListKnowledgeBaseResourcesResponse,
   ListKnowledgeBasesResponse,
+  StackConnectionResource,
   StackKnowledgeBaseDetail,
 } from '@/lib/stack/types';
 import { cn, formatBytes, formatDate } from '@/lib/utils';
@@ -70,7 +69,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Separator } from '@/components/ui/separator';
 import {
   Tooltip,
   TooltipContent,
@@ -140,6 +138,35 @@ const INTEGRATIONS: IntegrationItem[] = [
   { id: 'slack', label: 'Slack', type: 'image', src: '/icons/Slack.svg' },
 ];
 
+function createStubStackResource(params: {
+  id: string;
+  fullPath: string;
+  type: 'file' | 'directory';
+  modifiedAt: string;
+  size?: number;
+}): StackConnectionResource {
+  const { id, fullPath, type, modifiedAt, size } = params;
+
+  return {
+    knowledge_base_id: '',
+    created_at: modifiedAt,
+    modified_at: modifiedAt,
+    indexed_at: null,
+    inode_type: type,
+    resource_id: id,
+    inode_path: { path: fullPath },
+    dataloader_metadata: {
+      last_modified_at: modifiedAt,
+    },
+    user_metadata: {},
+    inode_id: null,
+    content_hash: undefined,
+    content_mime: undefined,
+    size,
+    status: 'resource',
+  };
+}
+
 const SAMPLE_LOCAL_FILES: ParsedResource[] = [
   {
     id: 'local-1',
@@ -149,7 +176,13 @@ const SAMPLE_LOCAL_FILES: ParsedResource[] = [
     size: 2458640,
     modifiedAt: '2024-01-15T10:30:00Z',
     status: 'not_indexed',
-    raw: {} as any,
+    raw: createStubStackResource({
+      id: 'local-1',
+      fullPath: '/Team Photo.jpg',
+      type: 'file',
+      modifiedAt: '2024-01-15T10:30:00Z',
+      size: 2458640,
+    }),
   },
   {
     id: 'local-2',
@@ -159,7 +192,13 @@ const SAMPLE_LOCAL_FILES: ParsedResource[] = [
     size: 2097152,
     modifiedAt: '2024-01-14T15:45:00Z',
     status: 'indexed',
-    raw: {} as any,
+    raw: createStubStackResource({
+      id: 'local-2',
+      fullPath: '/Marketing Strategy.pdf',
+      type: 'file',
+      modifiedAt: '2024-01-14T15:45:00Z',
+      size: 2097152,
+    }),
   },
   {
     id: 'local-3',
@@ -169,7 +208,13 @@ const SAMPLE_LOCAL_FILES: ParsedResource[] = [
     size: 524288,
     modifiedAt: '2024-01-13T09:20:00Z',
     status: 'not_indexed',
-    raw: {} as any,
+    raw: createStubStackResource({
+      id: 'local-3',
+      fullPath: '/Team Meeting Notes.docx',
+      type: 'file',
+      modifiedAt: '2024-01-13T09:20:00Z',
+      size: 524288,
+    }),
   },
   {
     id: 'local-4',
@@ -179,7 +224,13 @@ const SAMPLE_LOCAL_FILES: ParsedResource[] = [
     size: 15728640,
     modifiedAt: '2024-01-12T14:00:00Z',
     status: 'indexed',
-    raw: {} as any,
+    raw: createStubStackResource({
+      id: 'local-4',
+      fullPath: '/Demo Video.mp4',
+      type: 'file',
+      modifiedAt: '2024-01-12T14:00:00Z',
+      size: 15728640,
+    }),
   },
 ];
 
@@ -251,6 +302,43 @@ function ResourceSkeleton() {
   );
 }
 
+interface PrefetchHiddenQueriesProps {
+  connectionId?: string;
+  knowledgeBaseId?: string;
+  resource: ParsedResource;
+}
+
+function PrefetchHiddenQueries({
+  connectionId,
+  knowledgeBaseId,
+  resource,
+}: PrefetchHiddenQueriesProps) {
+  const isDirectory = resource.type === 'directory';
+  const knowledgeBasePath = resourcePathToKnowledgeBasePath(resource.fullPath);
+
+  useQuery<ListConnectionResourcesResponse>({
+    queryKey: ['connection-resources', connectionId, resource.id],
+    queryFn: () =>
+      apiGet(
+        `/api/stack/connections/${connectionId}/resources${resource.id ? `?resourceId=${resource.id}` : ''}`
+      ),
+    enabled: Boolean(connectionId && isDirectory),
+    staleTime: 120_000,
+  });
+
+  useQuery<ListKnowledgeBaseResourcesResponse>({
+    queryKey: ['knowledge-base-resources', knowledgeBaseId, knowledgeBasePath],
+    queryFn: () =>
+      apiGet(
+        `/api/stack/knowledge-bases/${knowledgeBaseId}/resources?resourcePath=${encodeURIComponent(knowledgeBasePath)}`
+      ),
+    enabled: Boolean(knowledgeBaseId && isDirectory),
+    staleTime: 120_000,
+  });
+
+  return <div className="hidden" aria-hidden />;
+}
+
 export function FilePicker() {
   const queryClient = useQueryClient();
   const selectionStore = useSelectionStore();
@@ -271,9 +359,16 @@ export function FilePicker() {
   const [selectedIntegration, setSelectedIntegration] = useState<string>('google-drive');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [loadingResourceId, setLoadingResourceId] = useState<string | null>(null);
+  const [prefetchResource, setPrefetchResource] = useState<ParsedResource | null>(null);
 
   useEffect(() => {
-    setIsMounted(true);
+    const timeoutId = setTimeout(() => {
+      setIsMounted(true);
+    }, 0);
+
+    return () => {
+      clearTimeout(timeoutId);
+    };
   }, []);
 
   const connectionsQuery = useQuery<ListConnectionsResponse>({
@@ -327,6 +422,9 @@ export function FilePicker() {
     enabled: Boolean(activeKnowledgeBaseId),
   });
 
+  const isStatusLoading =
+    selectedIntegration === 'google-drive' && knowledgeBaseResourcesQuery.isLoading;
+
   const parsedResources = useMemo(() => {
     if (selectedIntegration === 'files') {
       return SAMPLE_LOCAL_FILES;
@@ -347,7 +445,7 @@ export function FilePicker() {
       );
     }
 
-    if (statusFilter !== 'all') {
+    if (statusFilter !== 'all' && !isStatusLoading) {
       resources = resources.filter((resource) => {
         if (statusFilter === 'indexed') return resource.status === 'indexed';
         if (statusFilter === 'not_indexed') return resource.status === 'not_indexed';
@@ -359,7 +457,7 @@ export function FilePicker() {
     }
 
     return resources;
-  }, [parsedResources, filterText, statusFilter]);
+  }, [parsedResources, filterText, statusFilter, isStatusLoading]);
 
   const sortedResources = useMemo(() => {
     return [...filteredResources].sort((a, b) => {
@@ -507,9 +605,11 @@ export function FilePicker() {
 
   const deleteMutation = useMutation({
     mutationFn: async (resource: ParsedResource) => {
-      await apiDelete(
-        `/api/stack/knowledge-bases/${activeKnowledgeBaseId}/resources?resourcePath=${encodeURIComponent(resource.fullPath)}`
-      );
+      if (resource.type !== 'directory') {
+        await apiDelete(
+          `/api/stack/knowledge-bases/${activeKnowledgeBaseId}/resources?resourcePath=${encodeURIComponent(resource.fullPath)}`
+        );
+      }
       await apiPatch(
         `/api/stack/knowledge-bases/${activeKnowledgeBaseId}/connection-sources`,
         { resourceId: resource.id, action: 'remove' }
@@ -590,6 +690,11 @@ export function FilePicker() {
       return;
     }
 
+    if (isStatusLoading) {
+      toast.info('Please wait for statuses to finish loading.');
+      return;
+    }
+
     if (resource.status === 'indexed' || resource.status === 'processing') {
       deleteMutation.mutate(resource);
     } else {
@@ -607,7 +712,8 @@ export function FilePicker() {
     connectionResourcesQuery.isLoading;
 
   return (
-    <main className="fixed inset-0 flex items-center justify-center p-6 overflow-hidden">
+    <>
+      <main className="fixed inset-0 flex items-center justify-center p-6 overflow-hidden">
       <div className="relative w-full max-w-[1100px] h-[80vh] flex flex-col overflow-hidden rounded-[24px] border border-white/60 bg-white/85 shadow-2xl backdrop-blur-xl">
         <div className="absolute top-5 left-5 flex items-center gap-2 z-10">
           <div className="w-3 h-3 rounded-full bg-[#ff5f57] hover:bg-[#ff5f57]/80 transition-colors cursor-pointer" />
@@ -650,6 +756,7 @@ export function FilePicker() {
                         if (isEnabled) {
                           setSelectedIntegration(item.id);
                           selectionStore.clear();
+                          setPrefetchResource(null);
                         }
                       }}
                       className={cn(
@@ -891,11 +998,15 @@ export function FilePicker() {
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                           {sortedResources.map((resource) => {
                             const isSelected = selectionStore.isSelected(resource.id);
-                            const canDelete =
-                              resource.status === 'indexed' || resource.status === 'processing';
                             const isDirectory = resource.type === 'directory';
                             const displayName = isDirectory ? `${resource.name}/` : resource.name;
-                            const baseActionLabel = isDirectory
+                            const canDelete =
+                              !isStatusLoading &&
+                              (resource.status === 'indexed' || resource.status === 'processing');
+                            const isLoadingAction = loadingResourceId === resource.id;
+                            const baseActionLabel = isStatusLoading
+                              ? 'Loading...'
+                              : isDirectory
                               ? canDelete
                                 ? 'De-index'
                                 : 'Index all'
@@ -903,12 +1014,20 @@ export function FilePicker() {
                               ? 'De-index'
                               : 'Index';
                             const actionLabel =
-                              loadingResourceId === resource.id
+                              isLoadingAction
                                 ? canDelete
                                   ? 'De-indexing...'
                                   : 'Indexing...'
                                 : baseActionLabel;
                             const shouldShowCardNameTooltip = displayName.length > 32;
+
+                            const handlePrefetch = () => {
+                              if (isDirectory && selectedIntegration === 'google-drive') {
+                                setPrefetchResource((prev) =>
+                                  prev?.id === resource.id ? prev : resource
+                                );
+                              }
+                            };
 
                             return (
                               <div
@@ -919,6 +1038,8 @@ export function FilePicker() {
                                     ? 'border-slate-400 bg-slate-50'
                                     : 'border-slate-200/70 hover:border-slate-300'
                                 )}
+                                onMouseEnter={handlePrefetch}
+                                onFocus={handlePrefetch}
                                 onClick={() => {
                                   if (resource.type === 'directory') {
                                     handleEnterDirectory(resource);
@@ -986,7 +1107,11 @@ export function FilePicker() {
                                     {formatBytes(resource.size)}
                                   </p>
                                   <div className="mt-2 flex justify-center">
-                                    <StatusBadge status={resource.status} />
+                                    {isStatusLoading ? (
+                                      <Skeleton className="h-6 w-20 rounded-full" />
+                                    ) : (
+                                      <StatusBadge status={resource.status} />
+                                    )}
                                   </div>
                                 </div>
 
@@ -997,10 +1122,12 @@ export function FilePicker() {
                                         <Button
                                           type="button"
                                           size="sm"
-                                          variant={canDelete ? 'outline' : 'secondary'}
+                                          variant={isStatusLoading ? 'outline' : canDelete ? 'outline' : 'secondary'}
                                           className={cn(
                                             'w-full mt-2 text-xs h-7',
-                                            canDelete
+                                            isStatusLoading
+                                              ? 'border-slate-200 bg-slate-100 text-slate-400'
+                                              : canDelete
                                               ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:border-emerald-300'
                                               : 'bg-slate-900 text-white hover:bg-slate-800'
                                           )}
@@ -1010,11 +1137,11 @@ export function FilePicker() {
                                           }}
                                           disabled={
                                             selectedIntegration === 'files' ||
-                                            (isDirectory && resource.status === 'processing') ||
+                                            isStatusLoading ||
                                             loadingResourceId === resource.id
                                           }
                                         >
-                                          {loadingResourceId === resource.id ? (
+                                          {isLoadingAction ? (
                                             <Loader2 className="h-3 w-3 animate-spin" />
                                           ) : (
                                             actionLabel
@@ -1022,10 +1149,16 @@ export function FilePicker() {
                                         </Button>
                                       </div>
                                     </TooltipTrigger>
-                                    {selectedIntegration === 'files' && (
+                                    {selectedIntegration === 'files' ? (
                                       <TooltipContent sideOffset={5}>
                                         <p>These are sample/local files bruh :D</p>
                                       </TooltipContent>
+                                    ) : (
+                                      isStatusLoading && (
+                                        <TooltipContent sideOffset={5}>
+                                          <p>Loading file statuses...</p>
+                                        </TooltipContent>
+                                      )
                                     )}
                                   </Tooltip>
                                 </TooltipProvider>
@@ -1114,12 +1247,15 @@ export function FilePicker() {
                           : sortedResources.length > 0
                           ? sortedResources.map((resource) => {
                               const isSelected = selectionStore.isSelected(resource.id);
-                              const canDelete =
-                                resource.status === 'indexed' || resource.status === 'processing';
                               const isDirectory = resource.type === 'directory';
                               const displayName = isDirectory ? `${resource.name}/` : resource.name;
                               const isLoadingAction = loadingResourceId === resource.id;
-                              const baseActionLabel = isDirectory
+                              const canDelete =
+                                !isStatusLoading &&
+                                (resource.status === 'indexed' || resource.status === 'processing');
+                              const baseActionLabel = isStatusLoading
+                                ? 'Loading...'
+                                : isDirectory
                                 ? canDelete
                                   ? 'De-index'
                                   : 'Index all'
@@ -1187,6 +1323,20 @@ export function FilePicker() {
                                     'group cursor-pointer',
                                     isSelected ? 'bg-slate-50' : 'hover:bg-slate-100'
                                   )}
+                                  onMouseEnter={() => {
+                                    if (isDirectory && selectedIntegration === 'google-drive') {
+                                      setPrefetchResource((prev) =>
+                                        prev?.id === resource.id ? prev : resource
+                                      );
+                                    }
+                                  }}
+                                  onFocus={() => {
+                                    if (isDirectory && selectedIntegration === 'google-drive') {
+                                      setPrefetchResource((prev) =>
+                                        prev?.id === resource.id ? prev : resource
+                                      );
+                                    }
+                                  }}
                                   onClick={(e) => {
                                     if ((e.target as HTMLElement).closest('button')) {
                                       return;
@@ -1213,7 +1363,11 @@ export function FilePicker() {
                                     {formatBytes(resource.size)}
                                   </TableCell>
                                   <TableCell>
-                                    <StatusBadge status={resource.status} />
+                                    {isStatusLoading ? (
+                                      <Skeleton className="h-6 w-20 rounded-full" />
+                                    ) : (
+                                      <StatusBadge status={resource.status} />
+                                    )}
                                   </TableCell>
                                   <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
                                     <TooltipProvider>
@@ -1223,16 +1377,19 @@ export function FilePicker() {
                                             <Button
                                               type="button"
                                               size="sm"
-                                              variant={canDelete ? 'outline' : 'default'}
+                                              variant={isStatusLoading ? 'outline' : canDelete ? 'outline' : 'default'}
                                               className={cn(
                                                 'min-w-[90px] h-8 text-xs font-medium',
-                                                canDelete
+                                                isStatusLoading
+                                                  ? 'border-slate-200 bg-slate-100 text-slate-400'
+                                                  : canDelete
                                                   ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:border-emerald-300'
                                                   : 'bg-slate-900 text-white hover:bg-slate-800'
                                               )}
                                               onClick={() => handleRowAction(resource)}
                                               disabled={
                                                 selectedIntegration === 'files' ||
+                                                isStatusLoading ||
                                                 (isDirectory && resource.status === 'processing') ||
                                                 loadingResourceId === resource.id
                                               }
@@ -1245,10 +1402,16 @@ export function FilePicker() {
                                             </Button>
                                           </div>
                                         </TooltipTrigger>
-                                        {selectedIntegration === 'files' && (
+                                        {selectedIntegration === 'files' ? (
                                           <TooltipContent sideOffset={5}>
                                             <p>These are sample/local files bruh :D</p>
                                           </TooltipContent>
+                                        ) : (
+                                          isStatusLoading && (
+                                            <TooltipContent sideOffset={5}>
+                                              <p>Loading file statuses...</p>
+                                            </TooltipContent>
+                                          )
                                         )}
                                       </Tooltip>
                                     </TooltipProvider>
@@ -1331,16 +1494,27 @@ export function FilePicker() {
                       <div className="inline-block">
                         <Button
                           onClick={handleIndexSelected}
-                          disabled={selectedIntegration === 'files' || selectionCount === 0 || indexMutation.isPending}
+                          disabled={
+                            selectedIntegration === 'files' ||
+                            selectionCount === 0 ||
+                            indexMutation.isPending ||
+                            isStatusLoading
+                          }
                         >
                           Index selected
                         </Button>
                       </div>
                     </TooltipTrigger>
-                    {selectedIntegration === 'files' && (
+                    {selectedIntegration === 'files' ? (
                       <TooltipContent sideOffset={5}>
                         <p>These are local files bruh :D</p>
                       </TooltipContent>
+                    ) : (
+                      isStatusLoading && (
+                        <TooltipContent sideOffset={5}>
+                          <p>Loading file statuses...</p>
+                        </TooltipContent>
+                      )
                     )}
                   </Tooltip>
                 </TooltipProvider>
@@ -1349,6 +1523,19 @@ export function FilePicker() {
           </section>
         </div>
       </div>
-    </main>
+      </main>
+      {selectedIntegration === 'google-drive' &&
+        prefetchResource &&
+        activeConnectionId &&
+        activeKnowledgeBaseId && (
+          <Activity mode="hidden">
+            <PrefetchHiddenQueries
+              connectionId={activeConnectionId}
+              knowledgeBaseId={activeKnowledgeBaseId}
+              resource={prefetchResource}
+            />
+          </Activity>
+        )}
+    </>
   );
 }
