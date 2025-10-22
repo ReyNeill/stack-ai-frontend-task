@@ -1,14 +1,24 @@
 'use client';
 
+import Image from 'next/image';
 import { useMemo, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { LucideIcon } from 'lucide-react';
 import {
+  AppWindow,
+  Calendar,
+  Cloud,
+  FileText,
   Folder,
-  Loader2,
-  MoreHorizontal,
+  Globe,
+  Layers,
+  MessageSquare,
   RefreshCcw,
   Search,
+  Share2,
+  SortAsc,
+  Text,
 } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/http';
@@ -19,8 +29,11 @@ import {
   ListKnowledgeBasesResponse,
   StackKnowledgeBaseDetail,
 } from '@/lib/stack/types';
-import { formatBytes, formatDate, cn } from '@/lib/utils';
-import { ParsedResource, ResourceStatus } from '@/lib/file-picker/types';
+import { cn, formatBytes, formatDate } from '@/lib/utils';
+import {
+  ParsedResource,
+  ResourceStatus,
+} from '@/lib/file-picker/types';
 import {
   resourcePathToKnowledgeBasePath,
   toParsedResources,
@@ -30,32 +43,64 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
 
-interface BreadcrumbItem {
-  label: string;
-  resourceId?: string;
-  resourcePath: string;
-}
+import type { CheckedState } from '@radix-ui/react-checkbox';
 
 interface KnowledgeBaseOption {
   id: string;
   name: string;
 }
 
+interface BreadcrumbItem {
+  label: string;
+  resourcePath: string;
+  resourceId?: string;
+}
+
 type SortField = 'name' | 'modifiedAt';
 type SortDirection = 'asc' | 'desc';
 
-type StatusVariant = 'default' | 'secondary' | 'success' | 'warning' | 'destructive';
-
-const STATUS_VARIANTS: Record<ResourceStatus, { label: string; variant: StatusVariant }> = {
-  indexed: { label: 'Indexed', variant: 'success' },
-  pending: { label: 'Pending', variant: 'warning' },
-  processing: { label: 'Processing', variant: 'warning' },
-  error: { label: 'Error', variant: 'destructive' },
-  not_indexed: { label: 'Not indexed', variant: 'secondary' },
+const STATUS_META: Record<ResourceStatus, { label: string; className: string }> = {
+  indexed: { label: 'Indexed', className: 'bg-emerald-100 text-emerald-700' },
+  pending: { label: 'Pending', className: 'bg-amber-100 text-amber-800' },
+  processing: { label: 'Processing', className: 'bg-amber-100 text-amber-800' },
+  error: { label: 'Error', className: 'bg-red-100 text-red-700' },
+  not_indexed: { label: 'Not indexed', className: 'bg-slate-100 text-slate-500' },
 };
+
+type IntegrationItem =
+  | { id: string; label: string; count?: number; type: 'icon'; icon: LucideIcon }
+  | { id: string; label: string; count?: number; type: 'image'; src: string };
+
+const INTEGRATIONS: IntegrationItem[] = [
+  { id: 'files', label: 'Files', count: 4, type: 'icon', icon: Folder },
+  { id: 'websites', label: 'Websites', type: 'icon', icon: Globe },
+  { id: 'text', label: 'Text', type: 'icon', icon: Text },
+  { id: 'confluence', label: 'Confluence', type: 'icon', icon: Layers },
+  { id: 'notion', label: 'Notion', type: 'icon', icon: AppWindow },
+  { id: 'google-drive', label: 'Google Drive', type: 'image', src: '/icons/google-drive.svg' },
+  { id: 'onedrive', label: 'OneDrive', type: 'icon', icon: Cloud },
+  { id: 'sharepoint', label: 'SharePoint', type: 'icon', icon: Share2 },
+  { id: 'slack', label: 'Slack', type: 'icon', icon: MessageSquare },
+];
 
 function flattenKnowledgeBases(data?: ListKnowledgeBasesResponse): KnowledgeBaseOption[] {
   if (!data) return [];
@@ -75,25 +120,31 @@ function flattenKnowledgeBases(data?: ListKnowledgeBasesResponse): KnowledgeBase
   return options;
 }
 
-function makeStatusBadge(resource: ParsedResource) {
-  const { variant, label } =
-    STATUS_VARIANTS[resource.status] ?? STATUS_VARIANTS.not_indexed;
-  return <Badge variant={variant}>{label}</Badge>;
+function StatusBadge({ status }: { status: ResourceStatus }) {
+  const meta = STATUS_META[status] ?? STATUS_META.not_indexed;
+  return (
+    <Badge
+      variant="secondary"
+      className={cn('rounded-full px-2.5 py-1 text-xs font-medium', meta.className)}
+    >
+      {meta.label}
+    </Badge>
+  );
 }
 
-function ResourceSkeletonTable() {
+function ResourceSkeleton() {
   return (
-    <div className="flex flex-col gap-2">
-      {Array.from({ length: 7 }).map((_, index) => (
+    <div className="space-y-3">
+      {Array.from({ length: 8 }).map((_, index) => (
         <div
           key={index}
-          className="flex items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2"
+          className="flex items-center justify-between rounded-lg border border-slate-200/80 bg-white/60 px-4 py-3 shadow-sm"
         >
-          <div className="flex items-center gap-2">
-            <Skeleton className="h-4 w-4" />
+          <div className="flex items-center gap-3">
+            <Skeleton className="h-4 w-4 rounded-sm" />
             <Skeleton className="h-4 w-48" />
           </div>
-          <Skeleton className="h-6 w-24" />
+          <Skeleton className="h-4 w-24" />
         </div>
       ))}
     </div>
@@ -104,14 +155,17 @@ export function FilePicker() {
   const queryClient = useQueryClient();
   const selectionStore = useSelectionStore();
 
-  const [selectedConnectionId, setSelectedConnectionId] = useState<string | undefined>();
-  const [selectedKnowledgeBaseId, setSelectedKnowledgeBaseId] = useState<string | undefined>();
+  const [selectedKnowledgeBaseId, setSelectedKnowledgeBaseId] =
+    useState<string | undefined>();
   const [breadcrumbs, setBreadcrumbs] = useState<BreadcrumbItem[]>([
     { label: 'Root', resourcePath: '/' },
   ]);
   const [filterText, setFilterText] = useState('');
   const [sortField, setSortField] = useState<SortField>('name');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const [statusFilter, setStatusFilter] = useState<
+    'all' | 'indexed' | 'not_indexed' | 'processing' | 'error'
+  >('all');
 
   const connectionsQuery = useQuery<ListConnectionsResponse>({
     queryKey: ['connections'],
@@ -128,11 +182,9 @@ export function FilePicker() {
     [knowledgeBasesQuery.data]
   );
 
-  const activeConnectionId =
-    selectedConnectionId ?? connectionsQuery.data?.[0]?.connection_id;
+  const activeConnectionId = connectionsQuery.data?.[0]?.connection_id;
   const activeKnowledgeBaseId =
     selectedKnowledgeBaseId ?? knowledgeBaseOptions[0]?.id;
-
   const activeConnection = useMemo(() => {
     if (!connectionsQuery.data) return undefined;
     return (
@@ -176,12 +228,28 @@ export function FilePicker() {
   );
 
   const filteredResources = useMemo(() => {
-    const filter = filterText.trim().toLowerCase();
-    if (!filter) return parsedResources;
-    return parsedResources.filter((resource) =>
-      resource.name.toLowerCase().includes(filter)
-    );
-  }, [parsedResources, filterText]);
+    const textFilter = filterText.trim().toLowerCase();
+    let resources = parsedResources;
+
+    if (textFilter) {
+      resources = resources.filter((resource) =>
+        resource.name.toLowerCase().includes(textFilter)
+      );
+    }
+
+    if (statusFilter !== 'all') {
+      resources = resources.filter((resource) => {
+        if (statusFilter === 'indexed') return resource.status === 'indexed';
+        if (statusFilter === 'not_indexed') return resource.status === 'not_indexed';
+        if (statusFilter === 'processing')
+          return resource.status === 'processing' || resource.status === 'pending';
+        if (statusFilter === 'error') return resource.status === 'error';
+        return true;
+      });
+    }
+
+    return resources;
+  }, [parsedResources, filterText, statusFilter]);
 
   const sortedResources = useMemo(() => {
     return [...filteredResources].sort((a, b) => {
@@ -197,11 +265,10 @@ export function FilePicker() {
     });
   }, [filteredResources, sortDirection, sortField]);
 
+  const selectionCount = selectionStore.items.size;
   const allSelected =
     sortedResources.length > 0 &&
     sortedResources.every((resource) => selectionStore.isSelected(resource.id));
-
-  const selectionCount = selectionStore.items.size;
 
   const toggleSort = (field: SortField) => {
     setSortField(field);
@@ -227,7 +294,14 @@ export function FilePicker() {
     ]);
   };
 
-  const clearSelection = () => selectionStore.clear();
+  const handleToggleAll = (checked: CheckedState) => {
+    if (checked === 'indeterminate') return;
+    if (checked) {
+      selectionStore.addMany(sortedResources);
+    } else {
+      selectionStore.clear();
+    }
+  };
 
   const indexMutation = useMutation({
     mutationFn: async (payload: { resourceIds: string[] }) => {
@@ -275,7 +349,7 @@ export function FilePicker() {
                   content_hash: resource.raw.content_hash,
                   content_mime: resource.raw.content_mime,
                   size: resource.raw.size,
-                  status: 'pending',
+                  status: 'processing',
                 })),
             ],
           }
@@ -392,282 +466,350 @@ export function FilePicker() {
     }
   };
 
-  const toggleSelectAll = () => {
-    if (allSelected) {
-      sortedResources.forEach((resource) => {
-        if (selectionStore.isSelected(resource.id)) {
-          selectionStore.toggle(resource);
-        }
-      });
-      return;
-    }
-
-    sortedResources.forEach((resource) => {
-      if (!selectionStore.isSelected(resource.id)) {
-        selectionStore.toggle(resource);
-      }
-    });
-  };
-
   const isLoading =
     connectionsQuery.isLoading ||
     knowledgeBasesQuery.isLoading ||
     connectionResourcesQuery.isLoading;
 
   return (
-    <div className="flex h-full min-h-[600px] rounded-xl border border-slate-200 bg-white shadow-sm">
-      <aside className="hidden w-64 border-r border-slate-200 bg-slate-50 p-4 md:block">
-        <div className="text-sm font-semibold text-slate-600">Connections</div>
-        <div className="mt-3 space-y-2">
-          {connectionsQuery.isLoading && <Skeleton className="h-8 w-full" />}
-          {connectionsQuery.data?.map((connection) => {
-            const isActive = connection.connection_id === activeConnectionId;
-            return (
-              <button
-                key={connection.connection_id}
-                type="button"
-                onClick={() => {
-                  setSelectedConnectionId(connection.connection_id);
-                  setBreadcrumbs([
-                    {
-                      label: connection.name,
-                      resourcePath: '/',
-                    },
-                  ]);
-                  selectionStore.clear();
-                }}
-                className={cn(
-                  'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors',
-                  isActive ? 'bg-white font-medium shadow-sm' : 'hover:bg-white'
-                )}
-              >
-                <Folder className="h-4 w-4" />
-                <span className="truncate">{connection.name}</span>
-              </button>
-            );
-          })}
-        </div>
-      </aside>
+    <div className="relative flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center px-6 py-16">
+      <div className="relative z-10 w-full max-w-6xl overflow-hidden rounded-[32px] border border-white/60 bg-white/85 shadow-2xl backdrop-blur-xl">
+        <div className="flex">
+          <aside className="hidden w-64 shrink-0 border-r border-slate-200/60 bg-slate-50/80 p-6 md:block">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+              Integrations
+            </p>
+            <ScrollArea className="mt-4 h-[520px] pr-2">
+              <div className="space-y-1">
+                {INTEGRATIONS.map((item) => {
+                  const isActive = item.id === 'google-drive';
+                  const Wrapper = item.type === 'icon' ? item.icon : null;
 
-      <section className="flex flex-1 flex-col overflow-hidden">
-        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-4">
-          <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
-            {breadcrumbs.map((crumb, index) => {
-              const label =
-                index === 0
-                  ? activeConnection?.name ?? crumb.label
-                  : crumb.label;
-              return (
-              <div key={`${crumb.resourcePath}-${index}`} className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleBreadcrumbClick(index)}
-                  className="text-sm font-medium text-slate-700 transition hover:text-slate-900"
-                >
-                  {label}
-                </button>
-                {index < breadcrumbs.length - 1 && (
-                  <span className="text-slate-400">/</span>
-                )}
-              </div>
-              );
-            })}
-          </div>
-
-          <div className="flex items-center gap-3">
-            <div className="hidden items-center gap-2 rounded-md border border-slate-200 px-3 py-1 text-sm text-slate-600 md:flex">
-              <RefreshCcw className="h-4 w-4" />
-              <button
-                type="button"
-                onClick={() => {
-                  queryClient.invalidateQueries({
-                    queryKey: ['knowledge-base-resources', activeKnowledgeBaseId, knowledgeBasePath],
-                  });
-                  queryClient.invalidateQueries({
-                    queryKey: ['connection-resources', activeConnectionId, currentResourceId ?? 'root'],
-                  });
-                }}
-              >
-                Refresh
-              </button>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <label className="text-sm text-slate-500" htmlFor="knowledgeBase">
-                Knowledge base
-              </label>
-              <select
-                id="knowledgeBase"
-                className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
-                value={activeKnowledgeBaseId ?? ''}
-                onChange={(event) => {
-                  setSelectedKnowledgeBaseId(event.target.value);
-                  selectionStore.clear();
-                }}
-              >
-                {knowledgeBaseOptions.map((kb) => (
-                  <option key={kb.id} value={kb.id}>
-                    {kb.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </header>
-
-        <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-4 py-3">
-          <div className="flex items-center gap-2">
-            <Checkbox checked={allSelected} onChange={toggleSelectAll} />
-            <Button
-              type="button"
-              variant="ghost"
-              className="hidden gap-2 text-sm text-slate-600 md:inline-flex"
-              onClick={() => toggleSort('name')}
-            >
-              Sort by name
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              className="hidden gap-2 text-sm text-slate-600 md:inline-flex"
-              onClick={() => toggleSort('modifiedAt')}
-            >
-              Sort by date
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <div className="relative w-64">
-              <Search className="absolute left-2 top-2.5 h-4 w-4 text-slate-400" />
-              <Input
-                value={filterText}
-                onChange={(event) => setFilterText(event.target.value)}
-                placeholder="Search by name"
-                className="pl-8"
-              />
-            </div>
-            <Button
-              type="button"
-              onClick={handleIndexSelected}
-              disabled={selectionCount === 0 || indexMutation.isPending}
-            >
-              {indexMutation.isPending ? (
-                <span className="flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Indexing...
-                </span>
-              ) : (
-                `Index selected (${selectionCount})`
-              )}
-            </Button>
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto px-4 py-4">
-          {isLoading ? (
-            <ResourceSkeletonTable />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-12">Select</TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Last modified</TableHead>
-                  <TableHead>Size</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sortedResources.map((resource) => {
-                  const isSelected = selectionStore.isSelected(resource.id);
-                  const canDelete =
-                    resource.status === 'indexed' || resource.status === 'processing';
                   return (
-                    <TableRow
-                      key={resource.id}
-                      data-state={isSelected ? 'selected' : undefined}
+                    <div
+                      key={item.id}
+                      className={cn(
+                        'flex items-center justify-between rounded-xl px-3 py-2 text-sm transition hover:bg-white',
+                        isActive
+                          ? 'bg-white shadow-sm ring-1 ring-slate-200'
+                          : 'text-slate-500'
+                      )}
                     >
-                      <TableCell>
-                        <Checkbox
-                          checked={isSelected}
-                          onChange={() => selectionStore.toggle(resource)}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <button
-                          type="button"
-                          onClick={() => handleEnterDirectory(resource)}
-                          className={cn(
-                            'flex items-center gap-2 rounded-md px-1 py-1 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-100',
-                            resource.type !== 'directory' && 'cursor-default hover:bg-transparent'
-                          )}
-                        >
-                          <Folder className="h-4 w-4" />
-                          <span className="truncate">{resource.name}</span>
-                        </button>
-                      </TableCell>
-                      <TableCell>{formatDate(resource.modifiedAt)}</TableCell>
-                      <TableCell>{formatBytes(resource.size)}</TableCell>
-                      <TableCell>{makeStatusBadge(resource)}</TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          type="button"
-                          variant={canDelete ? 'destructive' : resource.type === 'directory' ? 'ghost' : 'outline'}
-                          size="sm"
-                          onClick={() => handleRowAction(resource)}
-                          disabled={
-                            (resource.type === 'directory' && resource.status === 'processing') ||
-                            indexMutation.isPending ||
-                            deleteMutation.isPending
-                          }
-                        >
-                          {resource.type === 'directory'
-                            ? 'Open'
-                            : canDelete
-                            ? 'De-index'
-                            : 'Index'}
-                        </Button>
-                      </TableCell>
-                    </TableRow>
+                      <div className="flex items-center gap-3">
+                        {item.type === 'icon' && Wrapper ? (
+                          <Wrapper className="h-4 w-4 text-slate-400" />
+                        ) : (
+                          <Image
+                            src={item.type === 'image' ? item.src : ''}
+                            alt={item.label}
+                            width={18}
+                            height={18}
+                            className="rounded-sm"
+                          />
+                        )}
+                        <span className="font-medium">{item.label}</span>
+                      </div>
+                      {item.count != null && (
+                        <span className="text-xs text-slate-400">{item.count}</span>
+                      )}
+                    </div>
                   );
                 })}
-                {sortedResources.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={6} className="py-6 text-center text-sm text-slate-500">
-                      No files in this folder.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          )}
-        </div>
+              </div>
+            </ScrollArea>
+          </aside>
 
-        {selectionCount > 0 && (
-          <div className="border-t border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-            <div className="flex flex-wrap items-center justify-between gap-2">
+          <section className="flex w-full flex-col">
+            <div className="flex items-center justify-between gap-4 px-8 pt-8">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-100">
+                  <Image
+                    src="/icons/google-drive.svg"
+                    alt="Google Drive"
+                    width={24}
+                    height={24}
+                  />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-lg font-semibold text-slate-900">
+                      Google Drive
+                    </h2>
+                    <Badge className="bg-slate-100 text-xs font-medium text-slate-500">
+                      Beta
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-slate-500">
+                    {connectionsQuery.data?.[0]?.name ?? 'Connected account'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  onClick={() => {
+                    queryClient.invalidateQueries({
+                      queryKey: ['knowledge-base-resources', activeKnowledgeBaseId, knowledgeBasePath],
+                    });
+                    queryClient.invalidateQueries({
+                      queryKey: ['connection-resources', activeConnectionId, currentResourceId ?? 'root'],
+                    });
+                  }}
+                >
+                  <RefreshCcw className="h-4 w-4" />
+                  Refresh
+                </Button>
+                <Select
+                  value={activeKnowledgeBaseId ?? undefined}
+                  onValueChange={(value) => {
+                    setSelectedKnowledgeBaseId(value);
+                    selectionStore.clear();
+                  }}
+                >
+                  <SelectTrigger className="min-w-[190px]">
+                    <SelectValue placeholder="Knowledge base" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {knowledgeBaseOptions.map((item) => (
+                      <SelectItem key={item.id} value={item.id}>
+                        {item.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <Separator className="mt-6" />
+
+            <div className="flex flex-col gap-6 px-8 py-6">
+              <div className="flex flex-wrap items-center gap-2 text-sm text-slate-400">
+                {breadcrumbs.map((crumb, index) => {
+                  const label =
+                    index === 0
+                      ? activeConnection?.name ?? 'Google Drive'
+                      : crumb.label;
+                  return (
+                    <div key={`${crumb.resourcePath}-${index}`} className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleBreadcrumbClick(index)}
+                        className={cn(
+                          'rounded-md px-1.5 py-1 transition',
+                          index === breadcrumbs.length - 1
+                            ? 'bg-slate-100 text-slate-600'
+                            : 'hover:bg-slate-100 hover:text-slate-600'
+                        )}
+                      >
+                        {label}
+                      </button>
+                      {index < breadcrumbs.length - 1 && <span>/</span>}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <Checkbox
+                    checked={allSelected}
+                    onCheckedChange={handleToggleAll}
+                    aria-label="Select all"
+                  />
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="gap-2 text-slate-500 hover:text-slate-700"
+                      onClick={() => toggleSort('name')}
+                    >
+                      <SortAsc className="h-4 w-4" />
+                      Sort by name
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="gap-2 text-slate-500 hover:text-slate-700"
+                      onClick={() => toggleSort('modifiedAt')}
+                    >
+                      <Calendar className="h-4 w-4" />
+                      Sort by date
+                    </Button>
+                    <Select
+                      value={statusFilter}
+                      onValueChange={(value) =>
+                        setStatusFilter(value as typeof statusFilter)
+                      }
+                    >
+                      <SelectTrigger className="h-8 w-[150px] justify-start rounded-full border-slate-200 bg-white px-3 text-sm font-medium text-slate-500 focus:ring-0">
+                        <SelectValue placeholder="Filter status" />
+                      </SelectTrigger>
+                      <SelectContent sideOffset={4}>
+                        <SelectItem value="all">All statuses</SelectItem>
+                        <SelectItem value="indexed">Indexed</SelectItem>
+                        <SelectItem value="processing">Processing</SelectItem>
+                        <SelectItem value="not_indexed">Not indexed</SelectItem>
+                        <SelectItem value="error">Errors</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="relative w-64">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+                    <Input
+                      value={filterText}
+                      onChange={(event) => setFilterText(event.target.value)}
+                      placeholder="Search by name"
+                      className="pl-9"
+                    />
+                  </div>
+                  <Button
+                    onClick={handleIndexSelected}
+                    disabled={selectionCount === 0 || indexMutation.isPending}
+                    className="gap-2"
+                  >
+                    Index selected ({selectionCount})
+                  </Button>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200/70 bg-white/70 shadow-sm">
+                <ScrollArea className="h-[420px]">
+                  {isLoading ? (
+                    <div className="p-6">
+                      <ResourceSkeleton />
+                    </div>
+                  ) : (
+                    <Table className="min-w-full">
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-12 text-slate-400">Select</TableHead>
+                          <TableHead>Name</TableHead>
+                          <TableHead>Last modified</TableHead>
+                          <TableHead>Size</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead className="text-right">Action</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {sortedResources.map((resource) => {
+                          const isSelected = selectionStore.isSelected(resource.id);
+                          const canDelete =
+                            resource.status === 'indexed' || resource.status === 'processing';
+
+                          return (
+                            <TableRow
+                              key={resource.id}
+                              data-state={isSelected ? 'selected' : undefined}
+                              className="text-sm"
+                            >
+                              <TableCell>
+                                <Checkbox
+                                  checked={isSelected}
+                                  onCheckedChange={() => selectionStore.toggle(resource)}
+                                  aria-label={`Select ${resource.name}`}
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <button
+                                  type="button"
+                                  onClick={() => handleEnterDirectory(resource)}
+                                  className={cn(
+                                    'flex w-full items-center gap-3 rounded-lg px-2 py-1 text-left transition',
+                                    resource.type === 'directory'
+                                      ? 'text-slate-700 hover:bg-slate-100'
+                                      : 'cursor-default text-slate-600'
+                                  )}
+                                >
+                                  {resource.type === 'directory' ? (
+                                    <Folder className="h-4 w-4 text-slate-300" />
+                                  ) : (
+                                    <FileText className="h-4 w-4 text-slate-300" />
+                                  )}
+                                  <span className="truncate">{resource.name}</span>
+                                </button>
+                              </TableCell>
+                              <TableCell className="text-slate-500">
+                                {formatDate(resource.modifiedAt)}
+                              </TableCell>
+                              <TableCell className="text-slate-500">
+                                {formatBytes(resource.size)}
+                              </TableCell>
+                              <TableCell>
+                                <StatusBadge status={resource.status} />
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant={canDelete ? 'outline' : 'secondary'}
+                                  className={cn(
+                                    'min-w-[88px] justify-center',
+                                    canDelete
+                                      ? 'border-red-200 bg-red-50 text-red-600 hover:bg-red-100'
+                                      : 'bg-slate-900 text-white hover:bg-slate-800'
+                                  )}
+                                  onClick={() => handleRowAction(resource)}
+                                  disabled={
+                                    (resource.type === 'directory' && resource.status === 'processing') ||
+                                    indexMutation.isPending ||
+                                    deleteMutation.isPending
+                                  }
+                                >
+                                  {resource.type === 'directory'
+                                    ? 'Open'
+                                    : canDelete
+                                    ? 'De-index'
+                                    : 'Index'}
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                        {sortedResources.length === 0 && (
+                          <TableRow>
+                            <TableCell
+                              colSpan={6}
+                              className="py-16 text-center text-sm text-slate-500"
+                            >
+                              No files in this folder.
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  )}
+                </ScrollArea>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between border-t border-slate-200/70 bg-slate-50/70 px-8 py-4 text-sm text-slate-500">
               <div>
                 {selectionCount} item{selectionCount === 1 ? '' : 's'} selected
               </div>
               <div className="flex items-center gap-3">
-                <Button type="button" variant="ghost" onClick={clearSelection}>
-                  Clear selection
+                <Button
+                  variant="ghost"
+                  onClick={() => selectionStore.clear()}
+                  className="text-slate-500 hover:text-slate-700"
+                >
+                  Cancel
                 </Button>
                 <Button
-                  type="button"
                   onClick={handleIndexSelected}
-                  disabled={indexMutation.isPending}
+                  disabled={selectionCount === 0 || indexMutation.isPending}
                 >
                   Index selected
                 </Button>
               </div>
             </div>
-          </div>
-        )}
-      </section>
+          </section>
+        </div>
+      </div>
     </div>
   );
 }
