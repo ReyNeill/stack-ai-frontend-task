@@ -4,15 +4,16 @@ import Image from 'next/image';
 import { useMemo, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
-  ArrowRightToLine,
   Calendar,
   FileText,
   Folder,
   Globe,
   Grid3x3,
+  Image as ImageIcon,
   Layers,
   List,
   Loader2,
+  Play,
   RefreshCcw,
   Search,
   Share2,
@@ -134,10 +135,10 @@ const INTEGRATIONS: IntegrationItem[] = [
 const SAMPLE_LOCAL_FILES: ParsedResource[] = [
   {
     id: 'local-1',
-    name: 'Project Presentation.pptx',
+    name: 'Team Photo.jpg',
     type: 'file',
-    fullPath: '/Project Presentation.pptx',
-    size: 5242880,
+    fullPath: '/Team Photo.jpg',
+    size: 2458640,
     modifiedAt: '2024-01-15T10:30:00Z',
     status: 'not_indexed',
     raw: {} as any,
@@ -173,6 +174,20 @@ const SAMPLE_LOCAL_FILES: ParsedResource[] = [
     raw: {} as any,
   },
 ];
+
+function getFileExtension(fileName: string): string {
+  return fileName.split('.').pop()?.toLowerCase() || '';
+}
+
+function isImageFile(fileName: string): boolean {
+  const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'];
+  return imageExtensions.includes(getFileExtension(fileName));
+}
+
+function isVideoFile(fileName: string): boolean {
+  const videoExtensions = ['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv'];
+  return videoExtensions.includes(getFileExtension(fileName));
+}
 
 function flattenKnowledgeBases(data?: ListKnowledgeBasesResponse): KnowledgeBaseOption[] {
   if (!data) return [];
@@ -584,20 +599,17 @@ export function FilePicker() {
           <aside 
             className={cn(
               "hidden border-r border-slate-200/60 bg-slate-50/80 md:flex md:flex-col overflow-hidden transition-all duration-300 ease-in-out",
-              isSidebarCollapsed ? "w-0 p-0" : "w-52 px-4 py-5"
+              isSidebarCollapsed ? "w-0 p-0" : "w-56 px-4 py-5"
             )}
           >
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+            <div
               className={cn(
-                "text-xs font-semibold uppercase tracking-wide text-slate-400 hover:text-slate-600 px-2 py-1 h-auto justify-start transition-opacity duration-200",
+                "text-xs font-semibold uppercase tracking-wide text-slate-400 px-2 py-1 transition-opacity duration-200",
                 isSidebarCollapsed && "opacity-0 pointer-events-none"
               )}
             >
               Integrations
-            </Button>
+            </div>
             <ScrollArea className={cn(
               "mt-4 flex-1 transition-opacity duration-200",
               isSidebarCollapsed ? "opacity-0" : "opacity-100"
@@ -659,38 +671,35 @@ export function FilePicker() {
             </ScrollArea>
           </aside>
 
-          {isSidebarCollapsed && (
-            <div className="hidden md:flex shrink-0 border-r border-slate-200/60 bg-slate-50/80">
-              <div className="p-6">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => setIsSidebarCollapsed(false)}
-                  className="hover:bg-slate-100"
-                  aria-label="Expand sidebar"
-                >
-                  <ArrowRightToLine className="h-4 w-4 text-slate-400" />
-                </Button>
-              </div>
-            </div>
-          )}
-
           <section className="flex w-full flex-col min-w-0 overflow-hidden">
             <div className="flex items-center justify-between gap-3 px-6 py-3 border-b border-slate-200/60">
               <div className="flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100">
-                  {selectedIntegration === 'files' ? (
-                    <Folder className="h-4 w-4 text-slate-600" />
-                  ) : (
-                    <Image
-                      src="/icons/google-drive.svg"
-                      alt="Google Drive"
-                      width={18}
-                      height={18}
-                    />
-                  )}
-                </div>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer"
+                        aria-label={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                      >
+                        {selectedIntegration === 'files' ? (
+                          <Folder className="h-4 w-4 text-slate-600" />
+                        ) : (
+                          <Image
+                            src="/icons/google-drive.svg"
+                            alt="Google Drive"
+                            width={18}
+                            height={18}
+                          />
+                        )}
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent sideOffset={5}>
+                      <p>{isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
                 <div>
                   <div className="flex items-center gap-1.5">
                     <h2 className="text-sm font-semibold text-slate-900">
@@ -917,9 +926,24 @@ export function FilePicker() {
                                 />
                               </div>
                               
-                              <div className="w-full aspect-square flex items-center justify-center mb-2 rounded-lg bg-slate-100">
+                              <div className="w-full aspect-square flex items-center justify-center mb-2 rounded-lg bg-slate-100 overflow-hidden relative">
                                 {resource.type === 'directory' ? (
                                   <Folder className="h-12 w-12 text-slate-400" />
+                                ) : isImageFile(resource.name) && selectedIntegration === 'files' ? (
+                                  <Image
+                                    src={resource.fullPath}
+                                    alt={resource.name}
+                                    fill
+                                    className="object-cover"
+                                    sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 20vw"
+                                  />
+                                ) : isVideoFile(resource.name) && selectedIntegration === 'files' ? (
+                                  <div className="relative w-full h-full bg-slate-900 flex items-center justify-center">
+                                    <Play className="h-12 w-12 text-white/80" />
+                                    <span className="absolute bottom-2 right-2 text-[10px] text-white/80 font-mono bg-black/50 px-1.5 py-0.5 rounded">
+                                      VIDEO
+                                    </span>
+                                  </div>
                                 ) : (
                                   <FileText className="h-12 w-12 text-slate-400" />
                                 )}
