@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
   AppWindow,
+  ArrowRightToLine,
   Calendar,
   Cloud,
   FileText,
@@ -166,6 +167,7 @@ export function FilePicker() {
   const [statusFilter, setStatusFilter] = useState<
     'all' | 'indexed' | 'not_indexed' | 'processing' | 'error'
   >('all');
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   const connectionsQuery = useQuery<ListConnectionsResponse>({
     queryKey: ['connections'],
@@ -473,16 +475,38 @@ export function FilePicker() {
 
   return (
     <main className="fixed inset-0 flex items-center justify-center p-6 overflow-hidden">
-      <div className="w-full max-w-[1100px] h-[80vh] flex flex-col overflow-hidden rounded-[24px] border border-white/60 bg-white/85 shadow-2xl backdrop-blur-xl">
-        <div className="flex flex-1 min-h-0">
-          <aside className="hidden w-52 shrink-0 border-r border-slate-200/60 bg-slate-50/80 p-5 md:flex md:flex-col overflow-hidden">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+      <div className="relative w-full max-w-[1100px] h-[80vh] flex flex-col overflow-hidden rounded-[24px] border border-white/60 bg-white/85 shadow-2xl backdrop-blur-xl">
+        <div className="absolute top-5 left-5 flex items-center gap-2 z-10">
+          <div className="w-3 h-3 rounded-full bg-[#ff5f57] hover:bg-[#ff5f57]/80 transition-colors cursor-pointer" />
+          <div className="w-3 h-3 rounded-full bg-[#febc2e] hover:bg-[#febc2e]/80 transition-colors cursor-pointer" />
+          <div className="w-3 h-3 rounded-full bg-[#28c840] hover:bg-[#28c840]/80 transition-colors cursor-pointer" />
+        </div>
+        <div className="flex flex-1 min-h-0 pt-12">
+          <aside 
+            className={cn(
+              "hidden border-r border-slate-200/60 bg-slate-50/80 md:flex md:flex-col overflow-hidden transition-all duration-300 ease-in-out",
+              isSidebarCollapsed ? "w-0 p-0" : "w-52 px-4 py-5"
+            )}
+          >
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+              className={cn(
+                "text-xs font-semibold uppercase tracking-wide text-slate-400 hover:text-slate-600 px-2 py-1 h-auto justify-start transition-opacity duration-200",
+                isSidebarCollapsed && "opacity-0 pointer-events-none"
+              )}
+            >
               Integrations
-            </p>
-            <ScrollArea className="mt-4 flex-1 pr-2">
-              <div className="space-y-1">
+            </Button>
+            <ScrollArea className={cn(
+              "mt-4 flex-1 transition-opacity duration-200",
+              isSidebarCollapsed ? "opacity-0" : "opacity-100"
+            )}>
+              <div className="space-y-1 px-1">
                 {INTEGRATIONS.map((item) => {
                   const isActive = item.id === 'google-drive';
+                  const isEnabled = item.id === 'files' || item.id === 'google-drive';
                   const Wrapper = item.type === 'icon' ? item.icon : null;
 
                   return (
@@ -490,29 +514,38 @@ export function FilePicker() {
                       key={item.id}
                       type="button"
                       variant="ghost"
+                      disabled={!isEnabled}
                       className={cn(
                         'flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 h-auto text-left text-sm font-normal transition',
                         isActive
                           ? 'cursor-default bg-white shadow-sm ring-1 ring-slate-200 hover:bg-white'
-                          : 'cursor-pointer text-slate-500 hover:bg-white'
+                          : isEnabled
+                          ? 'cursor-pointer text-slate-500 hover:bg-white'
+                          : 'cursor-not-allowed text-slate-300 opacity-50'
                       )}
                     >
                       <span className="flex items-center gap-2.5">
                         {item.type === 'icon' && Wrapper ? (
-                          <Wrapper className="h-3.5 w-3.5 text-slate-400" />
+                          <Wrapper className={cn(
+                            "h-3.5 w-3.5",
+                            isEnabled ? "text-slate-400" : "text-slate-300"
+                          )} />
                         ) : (
                           <Image
                             src={item.type === 'image' ? item.src : ''}
                             alt={item.label}
                             width={16}
                             height={16}
-                            className="rounded-sm"
+                            className={cn("rounded-sm", !isEnabled && "opacity-50")}
                           />
                         )}
                         <span className="font-medium text-[13px]">{item.label}</span>
                       </span>
                       {item.count != null && (
-                        <span className="text-xs text-slate-400">{item.count}</span>
+                        <span className={cn(
+                          "text-xs",
+                          isEnabled ? "text-slate-400" : "text-slate-300"
+                        )}>{item.count}</span>
                       )}
                     </Button>
                   );
@@ -520,6 +553,19 @@ export function FilePicker() {
               </div>
             </ScrollArea>
           </aside>
+
+          {isSidebarCollapsed && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setIsSidebarCollapsed(false)}
+              className="hidden md:flex shrink-0 ml-4 mr-4 mt-0 mb-auto hover:bg-slate-100"
+              aria-label="Expand sidebar"
+            >
+              <ArrowRightToLine className="h-4 w-4 text-slate-400" />
+            </Button>
+          )}
 
           <section className="flex w-full flex-col min-w-0 overflow-hidden">
             <div className="flex items-center justify-between gap-4 px-6 pt-6">
