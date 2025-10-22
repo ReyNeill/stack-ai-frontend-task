@@ -27,10 +27,13 @@ async function stackFetch(input: string, init?: RequestInit, retry = true): Prom
 
   if (!response.ok) {
     let body: unknown;
+    const text = await response.text();
     try {
-      body = await response.json();
+      // Try to parse as JSON if possible
+      body = text ? JSON.parse(text) : text;
     } catch {
-      body = await response.text();
+      // If JSON parsing fails, use the text as-is
+      body = text;
     }
 
     throw new StackApiError(
@@ -45,7 +48,19 @@ async function stackFetch(input: string, init?: RequestInit, retry = true): Prom
 
 export async function stackGet<T>(input: string): Promise<T> {
   const response = await stackFetch(input, { method: 'GET' });
-  return (await response.json()) as T;
+  
+  if (response.headers.get('content-type')?.includes('application/json')) {
+    try {
+      const text = await response.text();
+      if (text && text.trim()) {
+        return JSON.parse(text) as T;
+      }
+    } catch {
+      return undefined as T;
+    }
+  }
+  
+  return undefined as T;
 }
 
 export async function stackPost<T>(input: string, body?: unknown, init?: RequestInit): Promise<T> {
@@ -84,7 +99,16 @@ export async function stackDelete<T>(input: string): Promise<T> {
   });
 
   if (response.headers.get('content-type')?.includes('application/json')) {
-    return (await response.json()) as T;
+    try {
+      const text = await response.text();
+      // Only parse if there's actual content
+      if (text && text.trim()) {
+        return JSON.parse(text) as T;
+      }
+    } catch {
+      // If parsing fails, return undefined
+      return undefined as T;
+    }
   }
 
   return undefined as T;

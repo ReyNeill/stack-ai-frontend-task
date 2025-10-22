@@ -83,7 +83,13 @@ export async function triggerKnowledgeBaseSync(
   knowledgeBaseId: string,
   orgId: string
 ): Promise<void> {
-  await stackPost(`/knowledge_bases/sync/trigger/${knowledgeBaseId}/${orgId}`);
+  // Try POST first, fall back to GET if that fails
+  try {
+    await stackPost(`/knowledge_bases/sync/trigger/${knowledgeBaseId}/${orgId}`);
+  } catch (postError) {
+    // If POST fails, try GET as shown in the documentation
+    await stackGet(`/knowledge_bases/sync/trigger/${knowledgeBaseId}/${orgId}`);
+  }
 }
 
 export async function deleteKnowledgeBaseResource(

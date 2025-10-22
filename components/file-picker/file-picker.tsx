@@ -363,6 +363,11 @@ export function FilePicker() {
 
   const sortedResources = useMemo(() => {
     return [...filteredResources].sort((a, b) => {
+      // Always put directories first
+      if (a.type === 'directory' && b.type !== 'directory') return -1;
+      if (a.type !== 'directory' && b.type === 'directory') return 1;
+      
+      // Within same type, sort by selected field
       if (sortField === 'name') {
         return sortDirection === 'asc'
           ? a.name.localeCompare(b.name)
@@ -440,32 +445,39 @@ export function FilePicker() {
       ]);
 
       if (previous) {
-        queryClient.setQueryData<
-          ListKnowledgeBaseResourcesResponse
-        >(
+        const resourcesToIndex = parsedResources
+          .filter((resource) => resourceIds.includes(resource.id))
+          .map((resource) => ({
+            knowledge_base_id: activeKnowledgeBaseId!,
+            created_at: new Date().toISOString(),
+            modified_at: new Date().toISOString(),
+            indexed_at: null,
+            inode_type: resource.type,
+            resource_id: resource.id,
+            inode_path: { path: resource.fullPath },
+            dataloader_metadata: resource.raw.dataloader_metadata,
+            user_metadata: resource.raw.user_metadata,
+            inode_id: resource.raw.inode_id,
+            content_hash: resource.raw.content_hash,
+            content_mime: resource.raw.content_mime,
+            size: resource.raw.size,
+            status: 'processing',
+          }));
+
+        // Update existing resources or add new ones (avoid duplicates)
+        const existingIds = new Set(previous.data.map(item => item.resource_id));
+        const updatedData = previous.data.map(item => {
+          const updated = resourcesToIndex.find(r => r.resource_id === item.resource_id);
+          return updated || item;
+        });
+        
+        // Add new resources that don't exist yet
+        const newResources = resourcesToIndex.filter(r => !existingIds.has(r.resource_id));
+
+        queryClient.setQueryData<ListKnowledgeBaseResourcesResponse>(
           ['knowledge-base-resources', activeKnowledgeBaseId, knowledgeBasePath],
           {
-            data: [
-              ...previous.data,
-              ...parsedResources
-                .filter((resource) => resourceIds.includes(resource.id))
-                .map((resource) => ({
-                  knowledge_base_id: activeKnowledgeBaseId!,
-                  created_at: new Date().toISOString(),
-                  modified_at: new Date().toISOString(),
-                  indexed_at: null,
-                  inode_type: resource.type,
-                  resource_id: resource.id,
-                  inode_path: { path: resource.fullPath },
-                  dataloader_metadata: resource.raw.dataloader_metadata,
-                  user_metadata: resource.raw.user_metadata,
-                  inode_id: resource.raw.inode_id,
-                  content_hash: resource.raw.content_hash,
-                  content_mime: resource.raw.content_mime,
-                  size: resource.raw.size,
-                  status: 'processing',
-                })),
-            ],
+            data: [...updatedData, ...newResources],
           }
         );
       }
@@ -1003,10 +1015,7 @@ export function FilePicker() {
                                           }
                                         >
                                           {loadingResourceId === resource.id ? (
-                                            <>
-                                              <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                                              {actionLabel}
-                                            </>
+                                            <Loader2 className="h-3 w-3 animate-spin" />
                                           ) : (
                                             actionLabel
                                           )}
@@ -1034,9 +1043,9 @@ export function FilePicker() {
               </div>
             ) : (
               <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide px-5">
-                {/* apparently had to hack around shadcn to make the header stick */}
                 <Table containerClassName="overflow-visible">
-                  <TableHeader className="sticky top-0 z-30 bg-white shadow-[0_1px_0_0_rgba(148,163,184,0.4)] pt-3 pb-2 [&>tr]:bg-transparent [&>tr>th]:sticky [&>tr>th]:top-0 [&>tr>th]:bg-white [&>tr>th]:z-20">
+                {/* apparently had to hack around shadcn with arbitrary variants and values to make the header properly stick (complex css not required for most frontend tasks)*/}
+                  <TableHeader className="sticky top-0 z-30 bg-white shadow-[0_1px_0_0_rgb(226,232,240)] pt-3 pb-2 [&>tr]:bg-transparent [&>tr>th]:sticky [&>tr>th]:top-0 [&>tr>th]:bg-white [&>tr>th]:z-20">
                     <TableRow className="hover:bg-transparent">
                           <TableHead className="w-12">
                             <TooltipProvider>
@@ -1176,7 +1185,7 @@ export function FilePicker() {
                                   data-state={isSelected ? 'selected' : undefined}
                                   className={cn(
                                     'group cursor-pointer',
-                                    isSelected ? 'bg-slate-50' : 'hover:bg-slate-50/50'
+                                    isSelected ? 'bg-slate-50' : 'hover:bg-slate-100'
                                   )}
                                   onClick={(e) => {
                                     if ((e.target as HTMLElement).closest('button')) {
@@ -1229,10 +1238,7 @@ export function FilePicker() {
                                               }
                                             >
                                               {isLoadingAction ? (
-                                                <>
-                                                  <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                                                  {actionLabel}
-                                                </>
+                                                <Loader2 className="h-3 w-3 animate-spin" />
                                               ) : (
                                                 actionLabel
                                               )}

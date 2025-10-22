@@ -42,7 +42,14 @@ export async function POST(
     cron_job_id: kb.cron_job_id ?? null,
   });
 
-  await triggerKnowledgeBaseSync(knowledgeBaseId, org.org_id);
+  // Try to trigger sync, but don't fail the request if it errors
+  try {
+    await triggerKnowledgeBaseSync(knowledgeBaseId, org.org_id);
+  } catch (error) {
+    console.error('Failed to trigger knowledge base sync:', error);
+    // Continue anyway - the resources are already added to connection_source_ids
+    // and may be picked up by automatic syncing
+  }
 
   return NextResponse.json({
     knowledge_base: updated,
