@@ -4,6 +4,24 @@ import type {
 } from '@/lib/stack/types';
 import type { ParsedResource, ResourceStatus } from './types';
 
+function normalizePath(path: string | undefined, isDirectory: boolean): string {
+  if (!path) {
+    return isDirectory ? '' : '';
+  }
+
+  const trimmed = path.replace(/^\/+/, '');
+
+  if (!trimmed) {
+    return isDirectory ? '' : '';
+  }
+
+  if (isDirectory) {
+    return trimmed.endsWith('/') ? trimmed : `${trimmed}/`;
+  }
+
+  return trimmed;
+}
+
 function extractName(path: string): string {
   if (!path) return 'Untitled';
   const segments = path.split('/').filter(Boolean);
@@ -12,17 +30,26 @@ function extractName(path: string): string {
 
 function computeStatus(
   resource: StackConnectionResource,
-  knowledgeBaseData?: ListKnowledgeBaseResourcesResponse
+  knowledgeBaseData?: ListKnowledgeBaseResourcesResponse,
+  indexedResourceIds?: Set<string>
 ): { status: ResourceStatus; kbEntry?: ListKnowledgeBaseResourcesResponse['data'][number] } {
   if (!knowledgeBaseData) {
+    if (indexedResourceIds?.has(resource.resource_id)) {
+      return { status: 'processing' };
+    }
     return { status: 'not_indexed' };
   }
+
+  const normalizedResourcePath = normalizePath(
+    resource.inode_path.path,
+    resource.inode_type === 'directory'
+  );
 
   if (resource.inode_type === 'directory') {
     const match = knowledgeBaseData.data.find(
       (item) =>
         item.inode_type === 'directory' &&
-        item.inode_path.path === resource.inode_path.path
+        normalizePath(item.inode_path.path, true) === normalizedResourcePath
     );
 
     if (match) {
@@ -30,15 +57,16 @@ function computeStatus(
       return { status: mappedStatus, kbEntry: match };
     }
 
-    const directoryPath = resource.inode_path.path.endsWith('/')
-      ? resource.inode_path.path
-      : `${resource.inode_path.path}/`;
-
     const descendantEntries = knowledgeBaseData.data.filter((item) =>
-      item.inode_path.path.startsWith(directoryPath)
+      normalizePath(item.inode_path.path, item.inode_type === 'directory').startsWith(
+        normalizedResourcePath
+      )
     );
 
     if (descendantEntries.length === 0) {
+      if (indexedResourceIds?.has(resource.resource_id)) {
+        return { status: 'processing' };
+      }
       return { status: 'not_indexed' };
     }
 
@@ -58,6 +86,10 @@ function computeStatus(
       return { status: 'indexed' };
     }
 
+    if (indexedResourceIds?.has(resource.resource_id)) {
+      return { status: 'processing' };
+    }
+
     return { status: 'not_indexed' };
   }
 
@@ -66,6 +98,9 @@ function computeStatus(
   );
 
   if (!match) {
+    if (indexedResourceIds?.has(resource.resource_id)) {
+      return { status: 'processing' };
+    }
     return { status: 'not_indexed' };
   }
 
@@ -88,15 +123,19 @@ function mapKnowledgeBaseStatus(status: string | undefined): ResourceStatus {
 
 export function toParsedResources(
   resources: StackConnectionResource[],
-  knowledgeBaseData?: ListKnowledgeBaseResourcesResponse
+  knowledgeBaseData?: ListKnowledgeBaseResourcesResponse,
+  indexedResourceIds?: Set<string>
 ): ParsedResource[] {
   return resources.map((resource) => {
     const rawPath = resource.inode_path.path;
-    const fullPath =
-      resource.inode_type === 'directory' && rawPath && !rawPath.endsWith('/')
-        ? `${rawPath}/`
-        : rawPath;
-    const { status, kbEntry } = computeStatus(resource, knowledgeBaseData);
+    const normalizedFullPath =
+      resource.inode_type === 'directory'
+        ? normalizePath(rawPath, true)
+        : normalizePath(rawPath, false);
+
+    const fullPath = normalizedFullPath ? `/${normalizedFullPath}` : '/';
+
+    const { status, kbEntry } = computeStatus(resource, knowledgeBaseData, indexedResourceIds);
 
     return {
       id: resource.resource_id,

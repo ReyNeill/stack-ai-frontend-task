@@ -28,6 +28,7 @@ import {
   ListKnowledgeBaseResourcesResponse,
   ListKnowledgeBasesResponse,
   StackConnectionResource,
+  StackKnowledgeBaseSummary,
   StackKnowledgeBaseDetail,
 } from '@/lib/stack/types';
 import { cn, formatBytes, formatDate } from '@/lib/utils';
@@ -274,6 +275,25 @@ function flattenKnowledgeBases(data?: ListKnowledgeBasesResponse): KnowledgeBase
   return Array.from(knowledgeBaseMap.values());
 }
 
+function findKnowledgeBaseSummary(
+  data: ListKnowledgeBasesResponse | undefined,
+  knowledgeBaseId: string | undefined
+): StackKnowledgeBaseSummary | undefined {
+  if (!data || !knowledgeBaseId) return undefined;
+  const segments: Array<keyof ListKnowledgeBasesResponse> = ['admin', 'editor', 'viewer'];
+
+  for (const key of segments) {
+    const values = data[key];
+    if (!Array.isArray(values)) continue;
+    const match = values.find((item) => item.knowledge_base_id === knowledgeBaseId);
+    if (match) {
+      return match;
+    }
+  }
+
+  return undefined;
+}
+
 function StatusBadge({ status }: { status: ResourceStatus }) {
   const meta = STATUS_META[status] ?? STATUS_META.not_indexed;
   return (
@@ -475,6 +495,16 @@ export function FilePicker() {
   const activeConnectionId = connectionsQuery.data?.[0]?.connection_id;
   const activeKnowledgeBaseId =
     selectedKnowledgeBaseId ?? knowledgeBaseOptions[0]?.id;
+  const activeKnowledgeBaseSummary = useMemo(
+    () => findKnowledgeBaseSummary(knowledgeBasesQuery.data, activeKnowledgeBaseId),
+    [knowledgeBasesQuery.data, activeKnowledgeBaseId]
+  );
+  const indexedResourceIds = useMemo(() => {
+    if (!activeKnowledgeBaseSummary?.connection_source_ids) {
+      return undefined;
+    }
+    return new Set(activeKnowledgeBaseSummary.connection_source_ids);
+  }, [activeKnowledgeBaseSummary]);
   const activeConnection = useMemo(() => {
     if (!connectionsQuery.data) return undefined;
     return (
@@ -517,9 +547,15 @@ export function FilePicker() {
     }
     return toParsedResources(
       connectionResourcesQuery.data?.data ?? [],
-      knowledgeBaseResourcesQuery.data
+      knowledgeBaseResourcesQuery.data,
+      indexedResourceIds
     );
-  }, [selectedIntegration, connectionResourcesQuery.data, knowledgeBaseResourcesQuery.data]);
+  }, [
+    selectedIntegration,
+    connectionResourcesQuery.data,
+    knowledgeBaseResourcesQuery.data,
+    indexedResourceIds,
+  ]);
 
   const filteredResources = useMemo(() => {
     const textFilter = filterText.trim().toLowerCase();
@@ -1168,7 +1204,7 @@ export function FilePicker() {
                                       <Tooltip>
                                         <TooltipTrigger asChild>
                                           <p
-                                            className="text-xs font-medium text-slate-700 truncate mb-1 group-hover:underline"
+                                            className="text-xs font-medium text-slate-700 truncate mb-1 group-hover:underline cursor-pointer"
                                             onMouseEnter={() => startPrefetch(resource)}
                                             onFocus={() => startPrefetch(resource)}
                                           >
@@ -1184,7 +1220,7 @@ export function FilePicker() {
                                     </TooltipProvider>
                                   ) : (
                                     <p
-                                      className="text-xs font-medium text-slate-700 truncate mb-1 group-hover:underline"
+                                      className="text-xs font-medium text-slate-700 truncate mb-1 group-hover:underline cursor-pointer"
                                       onMouseEnter={() => startPrefetch(resource)}
                                       onFocus={() => startPrefetch(resource)}
                                     >
@@ -1371,7 +1407,7 @@ export function FilePicker() {
                                   onMouseEnter={() => startPrefetch(resource)}
                                   onFocus={() => startPrefetch(resource)}
                                   className={cn(
-                                    'text-sm font-medium text-slate-900 truncate block text-left group-hover:underline',
+                                    'text-sm font-medium text-slate-900 truncate block text-left group-hover:underline cursor-pointer',
                                     nameWidthClasses
                                   )}
                                   style={{ maxWidth: `${nameMaxWidth}px` }}

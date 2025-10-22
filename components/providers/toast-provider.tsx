@@ -8,7 +8,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     <>
       {children}
       <Toaster
-        position="top-right"
+        position="bottom-right"
         richColors
         toastOptions={{
           duration: 4000,
