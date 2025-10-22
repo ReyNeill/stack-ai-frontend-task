@@ -177,19 +177,24 @@ const SAMPLE_LOCAL_FILES: ParsedResource[] = [
 function flattenKnowledgeBases(data?: ListKnowledgeBasesResponse): KnowledgeBaseOption[] {
   if (!data) return [];
   const segments: Array<keyof ListKnowledgeBasesResponse> = ['admin', 'editor', 'viewer'];
-  const options: KnowledgeBaseOption[] = [];
+  const knowledgeBaseMap = new Map<string, KnowledgeBaseOption>();
+  
   for (const key of segments) {
     const values = data[key];
     if (Array.isArray(values)) {
-      options.push(
-        ...values.map((item) => ({
-          id: item.knowledge_base_id,
-          name: item.name,
-        }))
-      );
+      for (const item of values) {
+        // Deduplicate by ID - a knowledge base may appear in multiple segments
+        if (!knowledgeBaseMap.has(item.knowledge_base_id)) {
+          knowledgeBaseMap.set(item.knowledge_base_id, {
+            id: item.knowledge_base_id,
+            name: item.name,
+          });
+        }
+      }
     }
   }
-  return options;
+  
+  return Array.from(knowledgeBaseMap.values());
 }
 
 function StatusBadge({ status }: { status: ResourceStatus }) {
@@ -744,24 +749,31 @@ export function FilePicker() {
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
-                <Select
-                  value={activeKnowledgeBaseId ?? undefined}
-                  onValueChange={(value) => {
-                    setSelectedKnowledgeBaseId(value);
-                    selectionStore.clear();
-                  }}
-                >
-                  <SelectTrigger className="min-w-[160px] h-8 text-xs">
-                    <SelectValue placeholder="Knowledge base" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {knowledgeBaseOptions.map((item) => (
-                      <SelectItem key={item.id} value={item.id}>
-                        {item.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {selectedIntegration === 'google-drive' && (
+                  <Select
+                    value={activeKnowledgeBaseId ?? undefined}
+                    onValueChange={(value) => {
+                      setSelectedKnowledgeBaseId(value);
+                      selectionStore.clear();
+                    }}
+                  >
+                    <SelectTrigger className="min-w-[160px] h-8 text-xs">
+                      <SelectValue placeholder="Knowledge base" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {knowledgeBaseOptions.map((item) => (
+                        <SelectItem key={item.id} value={item.id}>
+                          <div className="flex items-center justify-between gap-2 w-full">
+                            <span className="truncate">{item.name}</span>
+                            <span className="text-[10px] text-slate-400 font-mono shrink-0">
+                              {item.id.slice(0, 8)}
+                            </span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
             </div>
 
@@ -925,40 +937,54 @@ export function FilePicker() {
                                 </div>
                               </div>
 
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant={canDelete ? 'outline' : 'secondary'}
-                                className={cn(
-                                  'w-full mt-2 text-xs h-7',
-                                  canDelete
-                                    ? 'border-red-200 bg-red-50 text-red-600 hover:bg-red-100'
-                                    : 'bg-slate-900 text-white hover:bg-slate-800'
-                                )}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleRowAction(resource);
-                                }}
-                                disabled={
-                                  (resource.type === 'directory' && resource.status === 'processing') ||
-                                  loadingResourceId === resource.id
-                                }
-                              >
-                                {loadingResourceId === resource.id ? (
-                                  <>
-                                    <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                                    {canDelete ? 'De-indexing...' : 'Indexing...'}
-                                  </>
-                                ) : (
-                                  <>
-                                    {resource.type === 'directory'
-                                      ? 'Open'
-                                      : canDelete
-                                      ? 'De-index'
-                                      : 'Index'}
-                                  </>
-                                )}
-                              </Button>
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <div className="w-full">
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant={canDelete ? 'outline' : 'secondary'}
+                                        className={cn(
+                                          'w-full mt-2 text-xs h-7',
+                                          canDelete
+                                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:border-emerald-300'
+                                            : 'bg-slate-900 text-white hover:bg-slate-800'
+                                        )}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleRowAction(resource);
+                                        }}
+                                        disabled={
+                                          selectedIntegration === 'files' ||
+                                          (resource.type === 'directory' && resource.status === 'processing') ||
+                                          loadingResourceId === resource.id
+                                        }
+                                      >
+                                        {loadingResourceId === resource.id ? (
+                                          <>
+                                            <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                                            {canDelete ? 'De-indexing...' : 'Indexing...'}
+                                          </>
+                                        ) : (
+                                          <>
+                                            {resource.type === 'directory'
+                                              ? 'Open'
+                                              : canDelete
+                                              ? 'De-index'
+                                              : 'Index'}
+                                          </>
+                                        )}
+                                      </Button>
+                                    </div>
+                                  </TooltipTrigger>
+                                  {selectedIntegration === 'files' && (
+                                    <TooltipContent sideOffset={5}>
+                                      <p>These are sample/local files bruh :D</p>
+                                    </TooltipContent>
+                                  )}
+                                </Tooltip>
+                              </TooltipProvider>
                             </div>
                           );
                         })}
@@ -1071,37 +1097,51 @@ export function FilePicker() {
                                 <StatusBadge status={resource.status} />
                               </TableCell>
                               <TableCell className="text-center py-3" onClick={(e) => e.stopPropagation()}>
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant={canDelete ? 'outline' : 'default'}
-                                  className={cn(
-                                    'min-w-[90px] h-8 text-xs font-medium',
-                                    canDelete
-                                      ? 'border-red-200 bg-red-50 text-red-600 hover:bg-red-100 hover:border-red-300'
-                                      : 'bg-slate-900 text-white hover:bg-slate-800'
-                                  )}
-                                  onClick={() => handleRowAction(resource)}
-                                  disabled={
-                                    (resource.type === 'directory' && resource.status === 'processing') ||
-                                    loadingResourceId === resource.id
-                                  }
-                                >
-                                  {loadingResourceId === resource.id ? (
-                                    <>
-                                      <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                                      {canDelete ? 'De-indexing...' : 'Indexing...'}
-                                    </>
-                                  ) : (
-                                    <>
-                                      {resource.type === 'directory'
-                                        ? 'Open'
-                                        : canDelete
-                                        ? 'De-index'
-                                        : 'Index'}
-                                    </>
-                                  )}
-                                </Button>
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <div className="inline-block">
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          variant={canDelete ? 'outline' : 'default'}
+                                          className={cn(
+                                            'min-w-[90px] h-8 text-xs font-medium',
+                                            canDelete
+                                              ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:border-emerald-300'
+                                              : 'bg-slate-900 text-white hover:bg-slate-800'
+                                          )}
+                                          onClick={() => handleRowAction(resource)}
+                                          disabled={
+                                            selectedIntegration === 'files' ||
+                                            (resource.type === 'directory' && resource.status === 'processing') ||
+                                            loadingResourceId === resource.id
+                                          }
+                                        >
+                                          {loadingResourceId === resource.id ? (
+                                            <>
+                                              <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                                              {canDelete ? 'De-indexing...' : 'Indexing...'}
+                                            </>
+                                          ) : (
+                                            <>
+                                              {resource.type === 'directory'
+                                                ? 'Open'
+                                                : canDelete
+                                                ? 'De-index'
+                                                : 'Index'}
+                                            </>
+                                          )}
+                                        </Button>
+                                      </div>
+                                    </TooltipTrigger>
+                                    {selectedIntegration === 'files' && (
+                                      <TooltipContent sideOffset={5}>
+                                        <p>These are sample/local files bruh :D</p>
+                                      </TooltipContent>
+                                    )}
+                                  </Tooltip>
+                                </TooltipProvider>
                               </TableCell>
                             </TableRow>
                           );
@@ -1135,12 +1175,25 @@ export function FilePicker() {
                 >
                   Cancel
                 </Button>
-                <Button
-                  onClick={handleIndexSelected}
-                  disabled={selectionCount === 0 || indexMutation.isPending}
-                >
-                  Index selected
-                </Button>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="inline-block">
+                        <Button
+                          onClick={handleIndexSelected}
+                          disabled={selectedIntegration === 'files' || selectionCount === 0 || indexMutation.isPending}
+                        >
+                          Index selected
+                        </Button>
+                      </div>
+                    </TooltipTrigger>
+                    {selectedIntegration === 'files' && (
+                      <TooltipContent sideOffset={5}>
+                        <p>These are local files bruh :D</p>
+                      </TooltipContent>
+                    )}
+                  </Tooltip>
+                </TooltipProvider>
               </div>
             </div>
           </section>
