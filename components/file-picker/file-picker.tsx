@@ -473,9 +473,9 @@ export function FilePicker() {
 
   return (
     <main className="fixed inset-0 flex items-center justify-center p-6 overflow-hidden">
-      <div className="w-full max-w-[1200px] h-[90vh] flex flex-col overflow-hidden rounded-[32px] border border-white/60 bg-white/85 shadow-2xl backdrop-blur-xl">
+      <div className="w-full max-w-[1100px] h-[80vh] flex flex-col overflow-hidden rounded-[24px] border border-white/60 bg-white/85 shadow-2xl backdrop-blur-xl">
         <div className="flex flex-1 min-h-0">
-          <aside className="hidden w-64 shrink-0 border-r border-slate-200/60 bg-slate-50/80 p-6 md:flex md:flex-col overflow-hidden">
+          <aside className="hidden w-52 shrink-0 border-r border-slate-200/60 bg-slate-50/80 p-5 md:flex md:flex-col overflow-hidden">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
               Integrations
             </p>
@@ -491,25 +491,25 @@ export function FilePicker() {
                       type="button"
                       variant="ghost"
                       className={cn(
-                        'flex w-full items-center justify-between rounded-xl px-3 py-2 h-auto text-left text-sm font-normal transition',
+                        'flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 h-auto text-left text-sm font-normal transition',
                         isActive
                           ? 'cursor-default bg-white shadow-sm ring-1 ring-slate-200 hover:bg-white'
                           : 'cursor-pointer text-slate-500 hover:bg-white'
                       )}
                     >
-                      <span className="flex items-center gap-3">
+                      <span className="flex items-center gap-2.5">
                         {item.type === 'icon' && Wrapper ? (
-                          <Wrapper className="h-4 w-4 text-slate-400" />
+                          <Wrapper className="h-3.5 w-3.5 text-slate-400" />
                         ) : (
                           <Image
                             src={item.type === 'image' ? item.src : ''}
                             alt={item.label}
-                            width={18}
-                            height={18}
+                            width={16}
+                            height={16}
                             className="rounded-sm"
                           />
                         )}
-                        <span className="font-medium">{item.label}</span>
+                        <span className="font-medium text-[13px]">{item.label}</span>
                       </span>
                       {item.count != null && (
                         <span className="text-xs text-slate-400">{item.count}</span>
@@ -522,9 +522,9 @@ export function FilePicker() {
           </aside>
 
           <section className="flex w-full flex-col min-w-0 overflow-hidden">
-            <div className="flex items-center justify-between gap-4 px-8 pt-8">
-              <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-100">
+            <div className="flex items-center justify-between gap-4 px-6 pt-6">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100">
                   <Image
                     src="/icons/google-drive.svg"
                     alt="Google Drive"
@@ -547,11 +547,11 @@ export function FilePicker() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2.5">
                 <Button
                   variant="outline"
                   size="sm"
-                  className="gap-2"
+                  className="gap-1.5"
                   onClick={() => {
                     queryClient.invalidateQueries({
                       queryKey: ['knowledge-base-resources', activeKnowledgeBaseId, knowledgeBasePath],
@@ -585,9 +585,9 @@ export function FilePicker() {
               </div>
             </div>
 
-            <Separator className="mt-6" />
+            <Separator className="mt-5" />
 
-            <div className="flex flex-col gap-6 px-8 py-6 flex-1 min-h-0 overflow-hidden">
+            <div className="flex flex-col gap-5 px-6 py-5 flex-1 min-h-0 overflow-hidden">
               <div className="flex flex-wrap items-center gap-2 text-sm text-slate-400">
                 {breadcrumbs.map((crumb, index) => {
                   const label =
@@ -616,8 +616,8 @@ export function FilePicker() {
                 })}
               </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
                   <Checkbox
                     checked={allSelected}
                     onCheckedChange={handleToggleAll}
@@ -661,7 +661,7 @@ export function FilePicker() {
                     </Select>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2.5">
                   <div className="relative w-64">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
                     <Input
@@ -684,19 +684,19 @@ export function FilePicker() {
               <div className="rounded-2xl border border-slate-200/70 bg-white/70 shadow-sm flex-1 min-h-0 flex flex-col overflow-hidden">
                 <ScrollArea className="flex-1">
                   {isLoading ? (
-                    <div className="p-6">
+                    <div className="p-5">
                       <ResourceSkeleton />
                     </div>
                   ) : (
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead className="w-12 text-slate-400">Select</TableHead>
-                          <TableHead>Name</TableHead>
-                          <TableHead>Last modified</TableHead>
-                          <TableHead>Size</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead className="text-right">Action</TableHead>
+                          <TableHead className="w-10 text-slate-400">Select</TableHead>
+                          <TableHead className="min-w-[200px]">Name</TableHead>
+                          <TableHead className="w-[180px]">Last modified</TableHead>
+                          <TableHead className="w-[90px]">Size</TableHead>
+                          <TableHead className="w-[120px]">Status</TableHead>
+                          <TableHead className="w-[100px] text-right">Action</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -709,7 +709,7 @@ export function FilePicker() {
                             <TableRow
                               key={resource.id}
                               data-state={isSelected ? 'selected' : undefined}
-                              className="text-sm"
+                              className="text-sm h-12"
                             >
                               <TableCell>
                                 <Checkbox
@@ -793,11 +793,11 @@ export function FilePicker() {
               </div>
             </div>
 
-            <div className="flex items-center justify-between border-t border-slate-200/70 bg-slate-50/70 px-8 py-4 text-sm text-slate-500">
+            <div className="flex items-center justify-between border-t border-slate-200/70 bg-slate-50/70 px-6 py-3.5 text-sm text-slate-500">
               <div>
                 {selectionCount} item{selectionCount === 1 ? '' : 's'} selected
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2.5">
                 <Button
                   variant="ghost"
                   onClick={() => selectionStore.clear()}
