@@ -1125,6 +1125,10 @@ export function FilePicker() {
                                 : baseActionLabel;
                               const shouldShowNameTooltip = displayName.length > 40;
 
+                              const nameMaxWidth = isSidebarCollapsed ? 420 : 300;
+                              const nameWidthClasses =
+                                'transition-[max-width] duration-300 ease-in-out';
+
                               const baseNameElement = isDirectory ? (
                                 <button
                                   type="button"
@@ -1132,12 +1136,22 @@ export function FilePicker() {
                                     e.stopPropagation();
                                     handleEnterDirectory(resource);
                                   }}
-                                  className="text-sm font-medium text-slate-900 truncate block max-w-[300px] text-left group-hover:underline"
+                                  className={cn(
+                                    'text-sm font-medium text-slate-900 truncate block text-left group-hover:underline',
+                                    nameWidthClasses
+                                  )}
+                                  style={{ maxWidth: `${nameMaxWidth}px` }}
                                 >
                                   {displayName}
                                 </button>
                               ) : (
-                                <span className="text-sm font-medium text-slate-900 truncate block max-w-[300px] group-hover:underline">
+                                <span
+                                  className={cn(
+                                    'text-sm font-medium text-slate-900 truncate block group-hover:underline',
+                                    nameWidthClasses
+                                  )}
+                                  style={{ maxWidth: `${nameMaxWidth}px` }}
+                                >
                                   {displayName}
                                 </span>
                               );
