@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, Fragment } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
   Calendar,
@@ -45,6 +45,14 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import {
+  Breadcrumb,
+  BreadcrumbList,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from '@/components/ui/breadcrumb';
 import {
   Table,
   TableBody,
@@ -680,8 +688,11 @@ export function FilePicker() {
                       <button
                         type="button"
                         onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer"
+                        className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer animate-[breathe_4s_ease-in-out_infinite]"
                         aria-label={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                        style={{
+                          animation: 'breathe 4s ease-in-out infinite'
+                        }}
                       >
                         {selectedIntegration === 'files' ? (
                           <Folder className="h-4 w-4 text-slate-600" />
@@ -787,36 +798,6 @@ export function FilePicker() {
             </div>
 
             <div className="flex flex-col gap-4 px-6 py-4 flex-1 min-h-0 overflow-hidden">
-              {selectedIntegration === 'google-drive' && breadcrumbs.length > 1 && (
-                <div className="flex flex-wrap items-center gap-2 text-sm">
-                  {breadcrumbs.map((crumb, index) => {
-                    const label =
-                      index === 0
-                        ? activeConnection?.name ?? 'Google Drive'
-                        : crumb.label;
-                    return (
-                      <div key={`${crumb.resourcePath}-${index}`} className="flex items-center gap-2">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleBreadcrumbClick(index)}
-                          className={cn(
-                            'h-auto rounded-md px-2 py-1 text-xs font-medium transition',
-                            index === breadcrumbs.length - 1
-                              ? 'bg-slate-100 text-slate-700 hover:bg-slate-100'
-                              : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
-                          )}
-                        >
-                          {label}
-                        </Button>
-                        {index < breadcrumbs.length - 1 && <span className="text-slate-400">/</span>}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <TooltipProvider>
@@ -884,13 +865,13 @@ export function FilePicker() {
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-slate-200/70 bg-white/70 shadow-sm flex-1 min-h-0 flex flex-col overflow-hidden">
-                <ScrollArea className="flex-1">
-                  {isLoading ? (
-                    <div className="p-5">
-                      <ResourceSkeleton />
-                    </div>
-                  ) : viewMode === 'grid' ? (
+              <div className="rounded-2xl border border-slate-200/70 bg-white/70 shadow-sm flex-1 min-h-0 flex flex-col relative">
+                {isLoading ? (
+                  <div className="p-5">
+                    <ResourceSkeleton />
+                  </div>
+                ) : viewMode === 'grid' ? (
+                  <ScrollArea className="flex-1 min-h-0">
                     <div className="p-5">
                       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                         {sortedResources.map((resource) => {
@@ -1020,9 +1001,10 @@ export function FilePicker() {
                       </div>
                     </div>
                   ) : (
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="border-b border-slate-200">
+                    <div className="px-5 py-3">
+                      <Table>
+                        <TableHeader className="sticky top-0 bg-white z-[5]">
+                          <TableRow className="border-b border-slate-200 hover:bg-transparent">
                           <TableHead className="w-12">
                             <div className="flex items-center justify-center">
                               <TooltipProvider>
@@ -1043,7 +1025,7 @@ export function FilePicker() {
                               </TooltipProvider>
                             </div>
                           </TableHead>
-                          <TableHead className="min-w-[250px]">
+                          <TableHead className="w-[300px] max-w-[300px]">
                             <span className="text-xs font-medium text-slate-500">Name</span>
                           </TableHead>
                           <TableHead className="w-[180px]">
@@ -1092,7 +1074,7 @@ export function FilePicker() {
                                 </div>
                               </TableCell>
                               <TableCell className="py-3">
-                                <div className="flex items-center">
+                                <div className="flex items-center max-w-[300px]">
                                   {resource.type === 'directory' ? (
                                     <button
                                       type="button"
@@ -1100,12 +1082,12 @@ export function FilePicker() {
                                         e.stopPropagation();
                                         handleEnterDirectory(resource);
                                       }}
-                                      className="text-sm font-medium text-slate-900 hover:underline truncate"
+                                      className="text-sm font-medium text-slate-900 hover:underline truncate block w-full text-left"
                                     >
                                       {resource.name}
                                     </button>
                                   ) : (
-                                    <span className="text-sm font-medium text-slate-900 truncate">
+                                    <span className="text-sm font-medium text-slate-900 truncate block w-full">
                                       {resource.name}
                                     </span>
                                   )}
@@ -1182,8 +1164,49 @@ export function FilePicker() {
                         )}
                       </TableBody>
                     </Table>
+                    </div>
                   )}
                 </ScrollArea>
+                {selectedIntegration === 'google-drive' && breadcrumbs.length > 1 && (
+                  <div className="absolute bottom-0 left-0 right-0 z-10 bg-white/95 backdrop-blur-sm border-t border-slate-200/70 px-5 py-2.5">
+                    <Breadcrumb>
+                      <BreadcrumbList>
+                        {breadcrumbs.map((crumb, index) => {
+                          const label =
+                            index === 0
+                              ? activeConnection?.name ?? 'Google Drive'
+                              : crumb.label;
+                          const isLast = index === breadcrumbs.length - 1;
+                          
+                          return (
+                            <Fragment key={`${crumb.resourcePath}-${index}`}>
+                              <BreadcrumbItem>
+                                {isLast ? (
+                                  <BreadcrumbPage className="text-xs font-medium">
+                                    {label}
+                                  </BreadcrumbPage>
+                                ) : (
+                                  <BreadcrumbLink asChild>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleBreadcrumbClick(index)}
+                                      className="h-auto rounded-md px-2 py-1 text-xs font-medium hover:bg-slate-100"
+                                    >
+                                      {label}
+                                    </Button>
+                                  </BreadcrumbLink>
+                                )}
+                              </BreadcrumbItem>
+                              {!isLast && <BreadcrumbSeparator />}
+                            </Fragment>
+                          );
+                        })}
+                      </BreadcrumbList>
+                    </Breadcrumb>
+                  </div>
+                )}
               </div>
             </div>
 
