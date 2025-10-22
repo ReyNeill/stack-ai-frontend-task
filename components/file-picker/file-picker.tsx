@@ -866,258 +866,101 @@ export function FilePicker() {
               </div>
 
               <div className="rounded-2xl border border-slate-200/70 bg-white/70 shadow-sm flex-1 min-h-0 flex flex-col relative">
-                {isLoading ? (
-                  <div className="p-5">
-                    <ResourceSkeleton />
-                  </div>
-                ) : viewMode === 'grid' ? (
-                  <ScrollArea className="flex-1 min-h-0">
-                    <div className="p-5">
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                        {sortedResources.map((resource) => {
-                          const isSelected = selectionStore.isSelected(resource.id);
-                          const canDelete =
-                            resource.status === 'indexed' || resource.status === 'processing';
-
-                          return (
-                            <div
-                              key={resource.id}
-                              className={cn(
-                                'group relative flex flex-col items-center p-3 rounded-lg border-2 transition-all cursor-pointer hover:bg-slate-50',
-                                isSelected
-                                  ? 'border-slate-400 bg-slate-50'
-                                  : 'border-slate-200/70 hover:border-slate-300'
-                              )}
-                              onClick={() => {
-                                if (resource.type === 'directory') {
-                                  handleEnterDirectory(resource);
-                                } else {
-                                  selectionStore.toggle(resource);
-                                }
-                              }}
-                            >
-                              <div 
-                                className="absolute top-2 left-2 z-10"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <Checkbox
-                                  checked={isSelected}
-                                  onCheckedChange={() => selectionStore.toggle(resource)}
-                                  aria-label={`Select ${resource.name}`}
-                                />
-                              </div>
-                              
-                              <div className="w-full aspect-square flex items-center justify-center mb-2 rounded-lg bg-slate-100 overflow-hidden relative">
-                                {resource.type === 'directory' ? (
-                                  <Folder className="h-12 w-12 text-slate-400" />
-                                ) : isImageFile(resource.name) && selectedIntegration === 'files' ? (
-                                  <Image
-                                    src={resource.fullPath}
-                                    alt={resource.name}
-                                    fill
-                                    className="object-cover"
-                                    sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 20vw"
-                                  />
-                                ) : isVideoFile(resource.name) && selectedIntegration === 'files' ? (
-                                  <div className="relative w-full h-full bg-slate-900 flex items-center justify-center">
-                                    <Play className="h-12 w-12 text-white/80" />
-                                    <span className="absolute bottom-2 right-2 text-[10px] text-white/80 font-mono bg-black/50 px-1.5 py-0.5 rounded">
-                                      VIDEO
-                                    </span>
-                                  </div>
-                                ) : (
-                                  <FileText className="h-12 w-12 text-slate-400" />
-                                )}
-                              </div>
-                              
-                              <div className="w-full text-center">
-                                <p className="text-xs font-medium text-slate-700 truncate mb-1">
-                                  {resource.name}
-                                </p>
-                                <p className="text-[10px] text-slate-500">
-                                  {formatBytes(resource.size)}
-                                </p>
-                                <div className="mt-2 flex justify-center">
-                                  <StatusBadge status={resource.status} />
-                                </div>
-                              </div>
-
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <div className="w-full">
-                                      <Button
-                                        type="button"
-                                        size="sm"
-                                        variant={canDelete ? 'outline' : 'secondary'}
-                                        className={cn(
-                                          'w-full mt-2 text-xs h-7',
-                                          canDelete
-                                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:border-emerald-300'
-                                            : 'bg-slate-900 text-white hover:bg-slate-800'
-                                        )}
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleRowAction(resource);
-                                        }}
-                                        disabled={
-                                          selectedIntegration === 'files' ||
-                                          (resource.type === 'directory' && resource.status === 'processing') ||
-                                          loadingResourceId === resource.id
-                                        }
-                                      >
-                                        {loadingResourceId === resource.id ? (
-                                          <>
-                                            <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                                            {canDelete ? 'De-indexing...' : 'Indexing...'}
-                                          </>
-                                        ) : (
-                                          <>
-                                            {resource.type === 'directory'
-                                              ? 'Open'
-                                              : canDelete
-                                              ? 'De-index'
-                                              : 'Index'}
-                                          </>
-                                        )}
-                                      </Button>
-                                    </div>
-                                  </TooltipTrigger>
-                                  {selectedIntegration === 'files' && (
-                                    <TooltipContent sideOffset={5}>
-                                      <p>These are sample/local files bruh :D</p>
-                                    </TooltipContent>
-                                  )}
-                                </Tooltip>
-                              </TooltipProvider>
-                            </div>
-                          );
-                        })}
-                        {sortedResources.length === 0 && (
-                          <div className="col-span-full py-16 text-center text-sm text-slate-500">
-                            No files in this folder.
-                          </div>
-                        )}
+                {viewMode === 'grid' ? (
+                  <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide">
+                    {isLoading ? (
+                      <div className="p-5">
+                        <ResourceSkeleton />
                       </div>
-                    </div>
-                  ) : (
-                    <div className="px-5 py-3">
-                      <Table>
-                        <TableHeader className="sticky top-0 bg-white z-[5]">
-                          <TableRow className="border-b border-slate-200 hover:bg-transparent">
-                          <TableHead className="w-12">
-                            <div className="flex items-center justify-center">
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <div className="flex items-center justify-center">
-                                      <Checkbox
-                                        checked={allSelected}
-                                        onCheckedChange={handleToggleAll}
-                                        aria-label="Select all"
-                                      />
-                                    </div>
-                                  </TooltipTrigger>
-                                  <TooltipContent sideOffset={5}>
-                                    <p>Select all</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            </div>
-                          </TableHead>
-                          <TableHead className="w-[300px] max-w-[300px]">
-                            <span className="text-xs font-medium text-slate-500">Name</span>
-                          </TableHead>
-                          <TableHead className="w-[180px]">
-                            <span className="text-xs font-medium text-slate-500">Last modified</span>
-                          </TableHead>
-                          <TableHead className="w-[100px]">
-                            <span className="text-xs font-medium text-slate-500">Size</span>
-                          </TableHead>
-                          <TableHead className="w-[120px]">
-                            <span className="text-xs font-medium text-slate-500">Status</span>
-                          </TableHead>
-                          <TableHead className="w-[120px] text-center">
-                            <span className="text-xs font-medium text-slate-500">Action</span>
-                          </TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {sortedResources.map((resource) => {
-                          const isSelected = selectionStore.isSelected(resource.id);
-                          const canDelete =
-                            resource.status === 'indexed' || resource.status === 'processing';
+                    ) : (
+                      <div className="p-5">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                          {sortedResources.map((resource) => {
+                            const isSelected = selectionStore.isSelected(resource.id);
+                            const canDelete =
+                              resource.status === 'indexed' || resource.status === 'processing';
 
-                          return (
-                            <TableRow
-                              key={resource.id}
-                              data-state={isSelected ? 'selected' : undefined}
-                              className={cn(
-                                "border-b border-slate-100 cursor-pointer transition-colors",
-                                isSelected ? 'bg-slate-50' : 'hover:bg-slate-50/50'
-                              )}
-                              onClick={(e) => {
-                                // Don't toggle if clicking on a button or interactive element
-                                if ((e.target as HTMLElement).closest('button')) {
-                                  return;
-                                }
-                                selectionStore.toggle(resource);
-                              }}
-                            >
-                              <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
-                                <div className="flex items-center justify-center">
+                            return (
+                              <div
+                                key={resource.id}
+                                className={cn(
+                                  'group relative flex flex-col items-center p-3 rounded-lg border-2 transition-all cursor-pointer hover:bg-slate-50',
+                                  isSelected
+                                    ? 'border-slate-400 bg-slate-50'
+                                    : 'border-slate-200/70 hover:border-slate-300'
+                                )}
+                                onClick={() => {
+                                  if (resource.type === 'directory') {
+                                    handleEnterDirectory(resource);
+                                  } else {
+                                    selectionStore.toggle(resource);
+                                  }
+                                }}
+                              >
+                                <div 
+                                  className="absolute top-2 left-2 z-10"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
                                   <Checkbox
                                     checked={isSelected}
                                     onCheckedChange={() => selectionStore.toggle(resource)}
                                     aria-label={`Select ${resource.name}`}
                                   />
                                 </div>
-                              </TableCell>
-                              <TableCell className="py-3">
-                                <div className="flex items-center max-w-[300px]">
+                                
+                                <div className="w-full aspect-square flex items-center justify-center mb-2 rounded-lg bg-slate-100 overflow-hidden relative">
                                   {resource.type === 'directory' ? (
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleEnterDirectory(resource);
-                                      }}
-                                      className="text-sm font-medium text-slate-900 hover:underline truncate block w-full text-left"
-                                    >
-                                      {resource.name}
-                                    </button>
+                                    <Folder className="h-12 w-12 text-slate-400" />
+                                  ) : isImageFile(resource.name) && selectedIntegration === 'files' ? (
+                                    <Image
+                                      src={resource.fullPath}
+                                      alt={resource.name}
+                                      fill
+                                      className="object-cover"
+                                      sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 20vw"
+                                    />
+                                  ) : isVideoFile(resource.name) && selectedIntegration === 'files' ? (
+                                    <div className="relative w-full h-full bg-slate-900 flex items-center justify-center">
+                                      <Play className="h-12 w-12 text-white/80" />
+                                      <span className="absolute bottom-2 right-2 text-[10px] text-white/80 font-mono bg-black/50 px-1.5 py-0.5 rounded">
+                                        VIDEO
+                                      </span>
+                                    </div>
                                   ) : (
-                                    <span className="text-sm font-medium text-slate-900 truncate block w-full">
-                                      {resource.name}
-                                    </span>
+                                    <FileText className="h-12 w-12 text-slate-400" />
                                   )}
                                 </div>
-                              </TableCell>
-                              <TableCell className="text-sm text-slate-900 py-3">
-                                {formatDate(resource.modifiedAt)}
-                              </TableCell>
-                              <TableCell className="text-sm text-slate-900 py-3">
-                                {formatBytes(resource.size)}
-                              </TableCell>
-                              <TableCell className="py-3">
-                                <StatusBadge status={resource.status} />
-                              </TableCell>
-                              <TableCell className="text-center py-3" onClick={(e) => e.stopPropagation()}>
+                                
+                                <div className="w-full text-center">
+                                  <p className="text-xs font-medium text-slate-700 truncate mb-1">
+                                    {resource.name}
+                                  </p>
+                                  <p className="text-[10px] text-slate-500">
+                                    {formatBytes(resource.size)}
+                                  </p>
+                                  <div className="mt-2 flex justify-center">
+                                    <StatusBadge status={resource.status} />
+                                  </div>
+                                </div>
+
                                 <TooltipProvider>
                                   <Tooltip>
                                     <TooltipTrigger asChild>
-                                      <div className="inline-block">
+                                      <div className="w-full">
                                         <Button
                                           type="button"
                                           size="sm"
-                                          variant={canDelete ? 'outline' : 'default'}
+                                          variant={canDelete ? 'outline' : 'secondary'}
                                           className={cn(
-                                            'min-w-[90px] h-8 text-xs font-medium',
+                                            'w-full mt-2 text-xs h-7',
                                             canDelete
                                               ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:border-emerald-300'
                                               : 'bg-slate-900 text-white hover:bg-slate-800'
                                           )}
-                                          onClick={() => handleRowAction(resource)}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleRowAction(resource);
+                                          }}
                                           disabled={
                                             selectedIntegration === 'files' ||
                                             (resource.type === 'directory' && resource.status === 'processing') ||
@@ -1148,25 +991,188 @@ export function FilePicker() {
                                     )}
                                   </Tooltip>
                                 </TooltipProvider>
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                        {sortedResources.length === 0 && (
-                          <TableRow>
-                            <TableCell
-                              colSpan={6}
-                              className="py-16 text-center text-sm text-slate-500"
-                            >
+                              </div>
+                            );
+                          })}
+                          {sortedResources.length === 0 && !isLoading && (
+                            <div className="col-span-full py-16 text-center text-sm text-slate-500">
                               No files in this folder.
-                            </TableCell>
-                          </TableRow>
-                        )}
-                      </TableBody>
-                    </Table>
-                    </div>
-                  )}
-                </ScrollArea>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide">
+                    {isLoading ? (
+                      <div className="px-5 py-3">
+                        <ResourceSkeleton />
+                      </div>
+                    ) : (
+                      <div className="px-5">
+                        <Table>
+                          <TableHeader className="[&_tr]:border-b [&_tr]:border-slate-200">
+                            <TableRow className="hover:bg-transparent">
+                              <TableHead className="sticky top-0 z-10 bg-white w-12">
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <div className="flex items-center justify-center">
+                                        <Checkbox
+                                          checked={allSelected}
+                                          onCheckedChange={handleToggleAll}
+                                          aria-label="Select all"
+                                          disabled={isLoading}
+                                        />
+                                      </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent sideOffset={5}>
+                                      <p>Select all</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              </TableHead>
+                              <TableHead className="sticky top-0 z-10 bg-white">
+                                <span className="text-xs font-medium text-slate-500">Name</span>
+                              </TableHead>
+                              <TableHead className="sticky top-0 z-10 bg-white">
+                                <span className="text-xs font-medium text-slate-500">Last modified</span>
+                              </TableHead>
+                              <TableHead className="sticky top-0 z-10 bg-white">
+                                <span className="text-xs font-medium text-slate-500">Size</span>
+                              </TableHead>
+                              <TableHead className="sticky top-0 z-10 bg-white">
+                                <span className="text-xs font-medium text-slate-500">Status</span>
+                              </TableHead>
+                              <TableHead className="sticky top-0 z-10 bg-white text-center">
+                                <span className="text-xs font-medium text-slate-500">Action</span>
+                              </TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {sortedResources.map((resource) => {
+                              const isSelected = selectionStore.isSelected(resource.id);
+                              const canDelete =
+                                resource.status === 'indexed' || resource.status === 'processing';
+
+                              return (
+                                <TableRow
+                                  key={resource.id}
+                                  data-state={isSelected ? 'selected' : undefined}
+                                  className={cn(
+                                    "cursor-pointer transition-colors",
+                                    isSelected ? 'bg-slate-50' : 'hover:bg-slate-50/50'
+                                  )}
+                                  onClick={(e) => {
+                                    if ((e.target as HTMLElement).closest('button')) {
+                                      return;
+                                    }
+                                    selectionStore.toggle(resource);
+                                  }}
+                                >
+                                  <TableCell className="w-12" onClick={(e) => e.stopPropagation()}>
+                                    <div className="flex items-center justify-center">
+                                      <Checkbox
+                                        checked={isSelected}
+                                        onCheckedChange={() => selectionStore.toggle(resource)}
+                                        aria-label={`Select ${resource.name}`}
+                                      />
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                    {resource.type === 'directory' ? (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleEnterDirectory(resource);
+                                        }}
+                                        className="text-sm font-medium text-slate-900 hover:underline truncate block max-w-[300px] text-left"
+                                      >
+                                        {resource.name}
+                                      </button>
+                                    ) : (
+                                      <span className="text-sm font-medium text-slate-900 truncate block max-w-[300px]">
+                                        {resource.name}
+                                      </span>
+                                    )}
+                                  </TableCell>
+                                  <TableCell className="text-sm text-slate-900">
+                                    {formatDate(resource.modifiedAt)}
+                                  </TableCell>
+                                  <TableCell className="text-sm text-slate-900">
+                                    {formatBytes(resource.size)}
+                                  </TableCell>
+                                  <TableCell>
+                                    <StatusBadge status={resource.status} />
+                                  </TableCell>
+                                  <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <div className="inline-block">
+                                            <Button
+                                              type="button"
+                                              size="sm"
+                                              variant={canDelete ? 'outline' : 'default'}
+                                              className={cn(
+                                                'min-w-[90px] h-8 text-xs font-medium',
+                                                canDelete
+                                                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:border-emerald-300'
+                                                  : 'bg-slate-900 text-white hover:bg-slate-800'
+                                              )}
+                                              onClick={() => handleRowAction(resource)}
+                                              disabled={
+                                                selectedIntegration === 'files' ||
+                                                (resource.type === 'directory' && resource.status === 'processing') ||
+                                                loadingResourceId === resource.id
+                                              }
+                                            >
+                                              {loadingResourceId === resource.id ? (
+                                                <>
+                                                  <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                                                  {canDelete ? 'De-indexing...' : 'Indexing...'}
+                                                </>
+                                              ) : (
+                                                <>
+                                                  {resource.type === 'directory'
+                                                    ? 'Open'
+                                                    : canDelete
+                                                    ? 'De-index'
+                                                    : 'Index'}
+                                                </>
+                                              )}
+                                            </Button>
+                                          </div>
+                                        </TooltipTrigger>
+                                        {selectedIntegration === 'files' && (
+                                          <TooltipContent sideOffset={5}>
+                                            <p>These are sample/local files bruh :D</p>
+                                          </TooltipContent>
+                                        )}
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                            {sortedResources.length === 0 && !isLoading && (
+                              <TableRow>
+                                <TableCell
+                                  colSpan={6}
+                                  className="py-16 text-center text-sm text-slate-500"
+                                >
+                                  No files in this folder.
+                                </TableCell>
+                              </TableRow>
+                            )}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
+                  </div>
+                )}
                 {selectedIntegration === 'google-drive' && breadcrumbs.length > 1 && (
                   <div className="absolute bottom-0 left-0 right-0 z-10 bg-white/95 backdrop-blur-sm border-t border-slate-200/70 px-5 py-2.5">
                     <Breadcrumb>
