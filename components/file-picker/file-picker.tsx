@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { useMemo, useState, Fragment } from 'react';
+import { useMemo, useState, Fragment, useEffect } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
   Calendar,
@@ -255,6 +255,7 @@ export function FilePicker() {
   const queryClient = useQueryClient();
   const selectionStore = useSelectionStore();
 
+  const [isMounted, setIsMounted] = useState(false);
   const [selectedKnowledgeBaseId, setSelectedKnowledgeBaseId] =
     useState<string | undefined>();
   const [breadcrumbs, setBreadcrumbs] = useState<BreadcrumbItem[]>([
@@ -270,6 +271,10 @@ export function FilePicker() {
   const [selectedIntegration, setSelectedIntegration] = useState<string>('google-drive');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [loadingResourceId, setLoadingResourceId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   const connectionsQuery = useQuery<ListConnectionsResponse>({
     queryKey: ['connections'],
@@ -567,11 +572,6 @@ export function FilePicker() {
   };
 
   const handleRowAction = (resource: ParsedResource) => {
-    if (resource.type === 'directory') {
-      handleEnterDirectory(resource);
-      return;
-    }
-
     // Prevent API calls for sample local files
     if (selectedIntegration === 'files') {
       toast.error('Indexing local files is not yet supported');
@@ -722,11 +722,6 @@ export function FilePicker() {
                       </Badge>
                     )}
                   </div>
-                  <p className="text-xs text-slate-500">
-                    {selectedIntegration === 'files' 
-                      ? 'Local files' 
-                      : connectionsQuery.data?.[0]?.name ?? 'Connected account'}
-                  </p>
                 </div>
               </div>
 
@@ -769,31 +764,34 @@ export function FilePicker() {
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
-                {selectedIntegration === 'google-drive' && (
-                  <Select
-                    value={activeKnowledgeBaseId ?? undefined}
-                    onValueChange={(value) => {
-                      setSelectedKnowledgeBaseId(value);
-                      selectionStore.clear();
-                    }}
-                  >
-                    <SelectTrigger className="min-w-[160px] h-8 text-xs">
-                      <SelectValue placeholder="Knowledge base" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {knowledgeBaseOptions.map((item) => (
-                        <SelectItem key={item.id} value={item.id}>
-                          <div className="flex items-center justify-between gap-2 w-full">
-                            <span className="truncate">{item.name}</span>
-                            <span className="text-[10px] text-slate-400 font-mono shrink-0">
-                              {item.id.slice(0, 8)}
-                            </span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
+                {selectedIntegration === 'google-drive' &&
+                  (isMounted ? (
+                    <Select
+                      value={activeKnowledgeBaseId ?? undefined}
+                      onValueChange={(value) => {
+                        setSelectedKnowledgeBaseId(value);
+                        selectionStore.clear();
+                      }}
+                    >
+                      <SelectTrigger className="min-w-[160px] h-8 text-xs">
+                        <SelectValue placeholder="Knowledge base" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {knowledgeBaseOptions.map((item) => (
+                          <SelectItem key={item.id} value={item.id}>
+                            <div className="flex items-center justify-between gap-2 w-full">
+                              <span className="truncate">{item.name}</span>
+                              <span className="text-[10px] text-slate-400 font-mono shrink-0">
+                                {item.id.slice(0, 8)}
+                              </span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <div className="min-w-[160px] h-8 rounded-md bg-slate-100 animate-pulse" />
+                  ))}
               </div>
             </div>
 
@@ -834,23 +832,27 @@ export function FilePicker() {
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
-                  <Select
-                    value={statusFilter}
-                    onValueChange={(value) =>
-                      setStatusFilter(value as typeof statusFilter)
-                    }
-                  >
-                    <SelectTrigger className="h-8 w-[130px] border-slate-200 bg-white text-xs text-slate-600">
-                      <SelectValue placeholder="All statuses" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All statuses</SelectItem>
-                      <SelectItem value="indexed">Indexed</SelectItem>
-                      <SelectItem value="processing">Processing</SelectItem>
-                      <SelectItem value="not_indexed">Not indexed</SelectItem>
-                      <SelectItem value="error">Errors</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  {isMounted ? (
+                    <Select
+                      value={statusFilter}
+                      onValueChange={(value) =>
+                        setStatusFilter(value as typeof statusFilter)
+                      }
+                    >
+                      <SelectTrigger className="h-8 w-[130px] border-slate-200 bg-white text-xs text-slate-600">
+                        <SelectValue placeholder="All statuses" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All statuses</SelectItem>
+                        <SelectItem value="indexed">Indexed</SelectItem>
+                        <SelectItem value="processing">Processing</SelectItem>
+                        <SelectItem value="not_indexed">Not indexed</SelectItem>
+                        <SelectItem value="error">Errors</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <div className="h-8 w-[130px] rounded-md bg-slate-100 animate-pulse" />
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="relative">
@@ -879,6 +881,22 @@ export function FilePicker() {
                             const isSelected = selectionStore.isSelected(resource.id);
                             const canDelete =
                               resource.status === 'indexed' || resource.status === 'processing';
+                            const isDirectory = resource.type === 'directory';
+                            const displayName = isDirectory ? `${resource.name}/` : resource.name;
+                            const baseActionLabel = isDirectory
+                              ? canDelete
+                                ? 'De-index'
+                                : 'Index all'
+                              : canDelete
+                              ? 'De-index'
+                              : 'Index';
+                            const actionLabel =
+                              loadingResourceId === resource.id
+                                ? canDelete
+                                  ? 'De-indexing...'
+                                  : 'Indexing...'
+                                : baseActionLabel;
+                            const shouldShowCardNameTooltip = displayName.length > 32;
 
                             return (
                               <div
@@ -904,7 +922,7 @@ export function FilePicker() {
                                   <Checkbox
                                     checked={isSelected}
                                     onCheckedChange={() => selectionStore.toggle(resource)}
-                                    aria-label={`Select ${resource.name}`}
+                                    aria-label={`Select ${displayName}`}
                                   />
                                 </div>
                                 
@@ -932,9 +950,26 @@ export function FilePicker() {
                                 </div>
                                 
                                 <div className="w-full text-center">
-                                  <p className="text-xs font-medium text-slate-700 truncate mb-1">
-                                    {resource.name}
-                                  </p>
+                                  {shouldShowCardNameTooltip ? (
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <p className="text-xs font-medium text-slate-700 truncate mb-1 group-hover:underline">
+                                            {displayName}
+                                          </p>
+                                        </TooltipTrigger>
+                                        <TooltipContent sideOffset={5}>
+                                          <p className="max-w-xs break-all text-xs font-medium text-slate-900">
+                                            {displayName}
+                                          </p>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  ) : (
+                                    <p className="text-xs font-medium text-slate-700 truncate mb-1 group-hover:underline">
+                                      {displayName}
+                                    </p>
+                                  )}
                                   <p className="text-[10px] text-slate-500">
                                     {formatBytes(resource.size)}
                                   </p>
@@ -963,23 +998,17 @@ export function FilePicker() {
                                           }}
                                           disabled={
                                             selectedIntegration === 'files' ||
-                                            (resource.type === 'directory' && resource.status === 'processing') ||
+                                            (isDirectory && resource.status === 'processing') ||
                                             loadingResourceId === resource.id
                                           }
                                         >
                                           {loadingResourceId === resource.id ? (
                                             <>
                                               <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                                              {canDelete ? 'De-indexing...' : 'Indexing...'}
+                                              {actionLabel}
                                             </>
                                           ) : (
-                                            <>
-                                              {resource.type === 'directory'
-                                                ? 'Open'
-                                                : canDelete
-                                                ? 'De-index'
-                                                : 'Index'}
-                                            </>
+                                            actionLabel
                                           )}
                                         </Button>
                                       </div>
@@ -1007,10 +1036,10 @@ export function FilePicker() {
               <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
                 <div className="flex-1 overflow-y-auto scrollbar-hide">
                   <div className="px-5 pt-3 pb-3">
-                    <Table>
-                      <TableHeader>
+                    <Table containerClassName="overflow-y-visible">
+                      <TableHeader className="sticky top-0 z-20 bg-white shadow-[0_1px_0_0_rgba(148,163,184,0.4)] [&>tr]:bg-white [&>tr>th]:sticky [&>tr>th]:top-0 [&>tr>th]:bg-white">
                         <TableRow className="hover:bg-transparent">
-                          <TableHead className="sticky top-0 z-20 bg-white w-12">
+                          <TableHead className="w-12">
                             <TooltipProvider>
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -1029,19 +1058,19 @@ export function FilePicker() {
                               </Tooltip>
                             </TooltipProvider>
                           </TableHead>
-                          <TableHead className="sticky top-0 z-20 bg-white">
+                          <TableHead>
                             <span className="text-xs font-medium text-slate-500">Name</span>
                           </TableHead>
-                          <TableHead className="sticky top-0 z-20 bg-white">
+                          <TableHead>
                             <span className="text-xs font-medium text-slate-500">Last modified</span>
                           </TableHead>
-                          <TableHead className="sticky top-0 z-20 bg-white">
+                          <TableHead>
                             <span className="text-xs font-medium text-slate-500">Size</span>
                           </TableHead>
-                          <TableHead className="sticky top-0 z-20 bg-white">
+                          <TableHead>
                             <span className="text-xs font-medium text-slate-500">Status</span>
                           </TableHead>
-                          <TableHead className="sticky top-0 z-20 bg-white text-center">
+                          <TableHead className="text-center">
                             <span className="text-xs font-medium text-slate-500">Action</span>
                           </TableHead>
                         </TableRow>
@@ -1079,13 +1108,61 @@ export function FilePicker() {
                               const isSelected = selectionStore.isSelected(resource.id);
                               const canDelete =
                                 resource.status === 'indexed' || resource.status === 'processing';
+                              const isDirectory = resource.type === 'directory';
+                              const displayName = isDirectory ? `${resource.name}/` : resource.name;
+                              const isLoadingAction = loadingResourceId === resource.id;
+                              const baseActionLabel = isDirectory
+                                ? canDelete
+                                  ? 'De-index'
+                                  : 'Index all'
+                                : canDelete
+                                ? 'De-index'
+                                : 'Index';
+                              const actionLabel = isLoadingAction
+                                ? canDelete
+                                  ? 'De-indexing...'
+                                  : 'Indexing...'
+                                : baseActionLabel;
+                              const shouldShowNameTooltip = displayName.length > 40;
+
+                              const baseNameElement = isDirectory ? (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleEnterDirectory(resource);
+                                  }}
+                                  className="text-sm font-medium text-slate-900 truncate block max-w-[300px] text-left group-hover:underline"
+                                >
+                                  {displayName}
+                                </button>
+                              ) : (
+                                <span className="text-sm font-medium text-slate-900 truncate block max-w-[300px] group-hover:underline">
+                                  {displayName}
+                                </span>
+                              );
+
+                              const nameElement = shouldShowNameTooltip ? (
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>{baseNameElement}</TooltipTrigger>
+                                    <TooltipContent sideOffset={6}>
+                                      <span className="max-w-xs break-words text-xs font-medium text-white">
+                                        {displayName}
+                                      </span>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              ) : (
+                                baseNameElement
+                              );
 
                               return (
                                 <TableRow
                                   key={resource.id}
                                   data-state={isSelected ? 'selected' : undefined}
                                   className={cn(
-                                    'cursor-pointer',
+                                    'group cursor-pointer',
                                     isSelected ? 'bg-slate-50' : 'hover:bg-slate-50/50'
                                   )}
                                   onClick={(e) => {
@@ -1100,27 +1177,12 @@ export function FilePicker() {
                                       <Checkbox
                                         checked={isSelected}
                                         onCheckedChange={() => selectionStore.toggle(resource)}
-                                        aria-label={`Select ${resource.name}`}
+                                        aria-label={`Select ${displayName}`}
                                       />
                                     </div>
                                   </TableCell>
                                   <TableCell>
-                                    {resource.type === 'directory' ? (
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleEnterDirectory(resource);
-                                        }}
-                                        className="text-sm font-medium text-slate-900 hover:underline truncate block max-w-[300px] text-left"
-                                      >
-                                        {resource.name}
-                                      </button>
-                                    ) : (
-                                      <span className="text-sm font-medium text-slate-900 truncate block max-w-[300px]">
-                                        {resource.name}
-                                      </span>
-                                    )}
+                                    {nameElement}
                                   </TableCell>
                                   <TableCell className="text-sm text-slate-900">
                                     {formatDate(resource.modifiedAt)}
@@ -1149,23 +1211,17 @@ export function FilePicker() {
                                               onClick={() => handleRowAction(resource)}
                                               disabled={
                                                 selectedIntegration === 'files' ||
-                                                (resource.type === 'directory' && resource.status === 'processing') ||
+                                                (isDirectory && resource.status === 'processing') ||
                                                 loadingResourceId === resource.id
                                               }
                                             >
-                                              {loadingResourceId === resource.id ? (
+                                              {isLoadingAction ? (
                                                 <>
                                                   <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                                                  {canDelete ? 'De-indexing...' : 'Indexing...'}
+                                                  {actionLabel}
                                                 </>
                                               ) : (
-                                                <>
-                                                  {resource.type === 'directory'
-                                                    ? 'Open'
-                                                    : canDelete
-                                                    ? 'De-index'
-                                                    : 'Index'}
-                                                </>
+                                                actionLabel
                                               )}
                                             </Button>
                                           </div>
