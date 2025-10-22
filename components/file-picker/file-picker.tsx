@@ -472,28 +472,29 @@ export function FilePicker() {
     connectionResourcesQuery.isLoading;
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center px-4 py-12">
-      <div className="w-full max-w-[min(1100px,calc(100vw-48px))] overflow-hidden rounded-[32px] border border-white/60 bg-white/85 shadow-2xl backdrop-blur-xl">
-        <div className="flex">
-          <aside className="hidden w-64 shrink-0 border-r border-slate-200/60 bg-slate-50/80 p-6 md:block">
+    <main className="fixed inset-0 flex items-center justify-center p-6 overflow-hidden">
+      <div className="w-full max-w-[1200px] h-[90vh] flex flex-col overflow-hidden rounded-[32px] border border-white/60 bg-white/85 shadow-2xl backdrop-blur-xl">
+        <div className="flex flex-1 min-h-0">
+          <aside className="hidden w-64 shrink-0 border-r border-slate-200/60 bg-slate-50/80 p-6 md:flex md:flex-col overflow-hidden">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
               Integrations
             </p>
-            <ScrollArea className="mt-4 h-[520px] pr-2">
+            <ScrollArea className="mt-4 flex-1 pr-2">
               <div className="space-y-1">
                 {INTEGRATIONS.map((item) => {
                   const isActive = item.id === 'google-drive';
                   const Wrapper = item.type === 'icon' ? item.icon : null;
 
                   return (
-                    <button
+                    <Button
                       key={item.id}
                       type="button"
+                      variant="ghost"
                       className={cn(
-                        'flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm transition hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300',
+                        'flex w-full items-center justify-between rounded-xl px-3 py-2 h-auto text-left text-sm font-normal transition',
                         isActive
-                          ? 'cursor-default bg-white shadow-sm ring-1 ring-slate-200'
-                          : 'cursor-pointer text-slate-500'
+                          ? 'cursor-default bg-white shadow-sm ring-1 ring-slate-200 hover:bg-white'
+                          : 'cursor-pointer text-slate-500 hover:bg-white'
                       )}
                     >
                       <span className="flex items-center gap-3">
@@ -513,14 +514,14 @@ export function FilePicker() {
                       {item.count != null && (
                         <span className="text-xs text-slate-400">{item.count}</span>
                       )}
-                    </button>
+                    </Button>
                   );
                 })}
               </div>
             </ScrollArea>
           </aside>
 
-          <section className="flex w-full flex-col">
+          <section className="flex w-full flex-col min-w-0 overflow-hidden">
             <div className="flex items-center justify-between gap-4 px-8 pt-8">
               <div className="flex items-center gap-3">
                 <div className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-100">
@@ -586,7 +587,7 @@ export function FilePicker() {
 
             <Separator className="mt-6" />
 
-            <div className="flex flex-col gap-6 px-8 py-6">
+            <div className="flex flex-col gap-6 px-8 py-6 flex-1 min-h-0 overflow-hidden">
               <div className="flex flex-wrap items-center gap-2 text-sm text-slate-400">
                 {breadcrumbs.map((crumb, index) => {
                   const label =
@@ -595,18 +596,20 @@ export function FilePicker() {
                       : crumb.label;
                   return (
                     <div key={`${crumb.resourcePath}-${index}`} className="flex items-center gap-2">
-                      <button
+                      <Button
                         type="button"
+                        variant="ghost"
+                        size="sm"
                         onClick={() => handleBreadcrumbClick(index)}
                         className={cn(
-                          'rounded-md px-1.5 py-1 transition',
+                          'h-auto rounded-md px-1.5 py-1 text-sm font-normal transition',
                           index === breadcrumbs.length - 1
-                            ? 'bg-slate-100 text-slate-600'
-                            : 'hover:bg-slate-100 hover:text-slate-600'
+                            ? 'bg-slate-100 text-slate-600 hover:bg-slate-100'
+                            : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'
                         )}
                       >
                         {label}
-                      </button>
+                      </Button>
                       {index < breadcrumbs.length - 1 && <span>/</span>}
                     </div>
                   );
@@ -678,14 +681,14 @@ export function FilePicker() {
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-slate-200/70 bg-white/70 shadow-sm">
-                <ScrollArea className="h-[420px]">
+              <div className="rounded-2xl border border-slate-200/70 bg-white/70 shadow-sm flex-1 min-h-0 flex flex-col overflow-hidden">
+                <ScrollArea className="flex-1">
                   {isLoading ? (
                     <div className="p-6">
                       <ResourceSkeleton />
                     </div>
                   ) : (
-                    <Table className="min-w-full">
+                    <Table>
                       <TableHeader>
                         <TableRow>
                           <TableHead className="w-12 text-slate-400">Select</TableHead>
@@ -716,14 +719,16 @@ export function FilePicker() {
                                 />
                               </TableCell>
                               <TableCell>
-                                <button
+                                <Button
                                   type="button"
+                                  variant="ghost"
                                   onClick={() => handleEnterDirectory(resource)}
+                                  disabled={resource.type !== 'directory'}
                                   className={cn(
-                                    'flex w-full items-center gap-3 rounded-lg px-2 py-1 text-left transition',
+                                    'flex w-full items-center justify-start gap-3 rounded-lg px-2 py-1 h-auto text-left transition font-normal',
                                     resource.type === 'directory'
                                       ? 'text-slate-700 hover:bg-slate-100'
-                                      : 'cursor-default text-slate-600'
+                                      : 'cursor-default text-slate-600 hover:bg-transparent'
                                   )}
                                 >
                                   {resource.type === 'directory' ? (
@@ -732,7 +737,7 @@ export function FilePicker() {
                                     <FileText className="h-4 w-4 text-slate-300" />
                                   )}
                                   <span className="truncate">{resource.name}</span>
-                                </button>
+                                </Button>
                               </TableCell>
                               <TableCell className="text-slate-500">
                                 {formatDate(resource.modifiedAt)}
@@ -811,6 +816,6 @@ export function FilePicker() {
           </section>
         </div>
       </div>
-    </div>
+    </main>
   );
 }
