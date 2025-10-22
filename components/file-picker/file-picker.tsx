@@ -11,7 +11,9 @@ import {
   FileText,
   Folder,
   Globe,
+  Grid3x3,
   Layers,
+  List,
   MessageSquare,
   RefreshCcw,
   Search,
@@ -62,6 +64,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 import type { CheckedState } from '@radix-ui/react-checkbox';
 
@@ -96,11 +104,54 @@ const INTEGRATIONS: IntegrationItem[] = [
   { id: 'websites', label: 'Websites', type: 'icon', icon: Globe },
   { id: 'text', label: 'Text', type: 'icon', icon: Text },
   { id: 'confluence', label: 'Confluence', type: 'icon', icon: Layers },
-  { id: 'notion', label: 'Notion', type: 'icon', icon: AppWindow },
+  { id: 'notion', label: 'Notion', type: 'image', src: '/icons/Notion.svg' },
   { id: 'google-drive', label: 'Google Drive', type: 'image', src: '/icons/google-drive.svg' },
-  { id: 'onedrive', label: 'OneDrive', type: 'icon', icon: Cloud },
-  { id: 'sharepoint', label: 'SharePoint', type: 'icon', icon: Share2 },
-  { id: 'slack', label: 'Slack', type: 'icon', icon: MessageSquare },
+  { id: 'onedrive', label: 'OneDrive', type: 'image', src: '/icons/Microsoft OneDrive.svg' },
+  { id: 'sharepoint', label: 'SharePoint', type: 'image', src: '/icons/Microsoft SharePoint.svg' },
+  { id: 'slack', label: 'Slack', type: 'image', src: '/icons/Slack.svg' },
+];
+
+const SAMPLE_LOCAL_FILES: ParsedResource[] = [
+  {
+    id: 'local-1',
+    name: 'Project Presentation.pptx',
+    type: 'file',
+    fullPath: '/Project Presentation.pptx',
+    size: 5242880,
+    modifiedAt: '2024-01-15T10:30:00Z',
+    status: 'not_indexed',
+    raw: {} as any,
+  },
+  {
+    id: 'local-2',
+    name: 'Marketing Strategy.pdf',
+    type: 'file',
+    fullPath: '/Marketing Strategy.pdf',
+    size: 2097152,
+    modifiedAt: '2024-01-14T15:45:00Z',
+    status: 'indexed',
+    raw: {} as any,
+  },
+  {
+    id: 'local-3',
+    name: 'Team Meeting Notes.docx',
+    type: 'file',
+    fullPath: '/Team Meeting Notes.docx',
+    size: 524288,
+    modifiedAt: '2024-01-13T09:20:00Z',
+    status: 'not_indexed',
+    raw: {} as any,
+  },
+  {
+    id: 'local-4',
+    name: 'Demo Video.mp4',
+    type: 'file',
+    fullPath: '/Demo Video.mp4',
+    size: 15728640,
+    modifiedAt: '2024-01-12T14:00:00Z',
+    status: 'indexed',
+    raw: {} as any,
+  },
 ];
 
 function flattenKnowledgeBases(data?: ListKnowledgeBasesResponse): KnowledgeBaseOption[] {
@@ -126,7 +177,7 @@ function StatusBadge({ status }: { status: ResourceStatus }) {
   return (
     <Badge
       variant="secondary"
-      className={cn('rounded-full px-2.5 py-1 text-xs font-medium', meta.className)}
+      className={cn('rounded-md px-2 py-0.5 text-xs font-medium w-fit', meta.className)}
     >
       {meta.label}
     </Badge>
@@ -168,6 +219,8 @@ export function FilePicker() {
     'all' | 'indexed' | 'not_indexed' | 'processing' | 'error'
   >('all');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [selectedIntegration, setSelectedIntegration] = useState<string>('google-drive');
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
 
   const connectionsQuery = useQuery<ListConnectionsResponse>({
     queryKey: ['connections'],
@@ -220,14 +273,15 @@ export function FilePicker() {
     enabled: Boolean(activeKnowledgeBaseId),
   });
 
-  const parsedResources = useMemo(
-    () =>
-      toParsedResources(
-        connectionResourcesQuery.data?.data ?? [],
-        knowledgeBaseResourcesQuery.data
-      ),
-    [connectionResourcesQuery.data, knowledgeBaseResourcesQuery.data]
-  );
+  const parsedResources = useMemo(() => {
+    if (selectedIntegration === 'files') {
+      return SAMPLE_LOCAL_FILES;
+    }
+    return toParsedResources(
+      connectionResourcesQuery.data?.data ?? [],
+      knowledgeBaseResourcesQuery.data
+    );
+  }, [selectedIntegration, connectionResourcesQuery.data, knowledgeBaseResourcesQuery.data]);
 
   const filteredResources = useMemo(() => {
     const textFilter = filterText.trim().toLowerCase();
@@ -481,7 +535,8 @@ export function FilePicker() {
           <div className="w-3 h-3 rounded-full bg-[#febc2e] hover:bg-[#febc2e]/80 transition-colors cursor-pointer" />
           <div className="w-3 h-3 rounded-full bg-[#28c840] hover:bg-[#28c840]/80 transition-colors cursor-pointer" />
         </div>
-        <div className="flex flex-1 min-h-0 pt-12">
+        <div className="h-12 border-b border-slate-200/60 shrink-0" />
+        <div className="flex flex-1 min-h-0">
           <aside 
             className={cn(
               "hidden border-r border-slate-200/60 bg-slate-50/80 md:flex md:flex-col overflow-hidden transition-all duration-300 ease-in-out",
@@ -503,9 +558,9 @@ export function FilePicker() {
               "mt-4 flex-1 transition-opacity duration-200",
               isSidebarCollapsed ? "opacity-0" : "opacity-100"
             )}>
-              <div className="space-y-1 px-1">
+              <div className="space-y-1 px-1 py-1">
                 {INTEGRATIONS.map((item) => {
-                  const isActive = item.id === 'google-drive';
+                  const isActive = item.id === selectedIntegration;
                   const isEnabled = item.id === 'files' || item.id === 'google-drive';
                   const Wrapper = item.type === 'icon' ? item.icon : null;
 
@@ -515,6 +570,12 @@ export function FilePicker() {
                       type="button"
                       variant="ghost"
                       disabled={!isEnabled}
+                      onClick={() => {
+                        if (isEnabled) {
+                          setSelectedIntegration(item.id);
+                          selectionStore.clear();
+                        }
+                      }}
                       className={cn(
                         'flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 h-auto text-left text-sm font-normal transition',
                         isActive
@@ -555,49 +616,59 @@ export function FilePicker() {
           </aside>
 
           {isSidebarCollapsed && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => setIsSidebarCollapsed(false)}
-              className="hidden md:flex shrink-0 ml-4 mr-4 mt-0 mb-auto hover:bg-slate-100"
-              aria-label="Expand sidebar"
-            >
-              <ArrowRightToLine className="h-4 w-4 text-slate-400" />
-            </Button>
+            <div className="hidden md:flex items-center py-3 px-4">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setIsSidebarCollapsed(false)}
+                className="hover:bg-slate-100"
+                aria-label="Expand sidebar"
+              >
+                <ArrowRightToLine className="h-4 w-4 text-slate-400" />
+              </Button>
+            </div>
           )}
 
           <section className="flex w-full flex-col min-w-0 overflow-hidden">
-            <div className="flex items-center justify-between gap-4 px-6 pt-6">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100">
-                  <Image
-                    src="/icons/google-drive.svg"
-                    alt="Google Drive"
-                    width={24}
-                    height={24}
-                  />
+            <div className="flex items-center justify-between gap-3 px-6 py-3 border-b border-slate-200/60">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100">
+                  {selectedIntegration === 'files' ? (
+                    <Folder className="h-4 w-4 text-slate-600" />
+                  ) : (
+                    <Image
+                      src="/icons/google-drive.svg"
+                      alt="Google Drive"
+                      width={18}
+                      height={18}
+                    />
+                  )}
                 </div>
                 <div>
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-lg font-semibold text-slate-900">
-                      Google Drive
+                  <div className="flex items-center gap-1.5">
+                    <h2 className="text-sm font-semibold text-slate-900">
+                      {selectedIntegration === 'files' ? 'Files' : 'Google Drive'}
                     </h2>
-                    <Badge className="bg-slate-100 text-xs font-medium text-slate-500">
-                      Beta
-                    </Badge>
+                    {selectedIntegration === 'google-drive' && (
+                      <Badge className="bg-slate-100 text-[10px] font-medium text-slate-500 px-1.5 py-0">
+                        Beta
+                      </Badge>
+                    )}
                   </div>
-                  <p className="text-sm text-slate-500">
-                    {connectionsQuery.data?.[0]?.name ?? 'Connected account'}
+                  <p className="text-xs text-slate-500">
+                    {selectedIntegration === 'files' 
+                      ? 'Local files' 
+                      : connectionsQuery.data?.[0]?.name ?? 'Connected account'}
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
                   size="sm"
-                  className="gap-1.5"
+                  className="gap-1.5 h-8"
                   onClick={() => {
                     queryClient.invalidateQueries({
                       queryKey: ['knowledge-base-resources', activeKnowledgeBaseId, knowledgeBasePath],
@@ -607,9 +678,31 @@ export function FilePicker() {
                     });
                   }}
                 >
-                  <RefreshCcw className="h-4 w-4" />
-                  Refresh
+                  <RefreshCcw className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Refresh</span>
                 </Button>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5 h-8"
+                        onClick={() => setViewMode(viewMode === 'list' ? 'grid' : 'list')}
+                      >
+                        {viewMode === 'list' ? (
+                          <Grid3x3 className="h-3.5 w-3.5" />
+                        ) : (
+                          <List className="h-3.5 w-3.5" />
+                        )}
+                        <span className="hidden sm:inline">View</span>
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent sideOffset={5}>
+                      <p>{viewMode === 'list' ? 'Switch to grid view' : 'Switch to list view'}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
                 <Select
                   value={activeKnowledgeBaseId ?? undefined}
                   onValueChange={(value) => {
@@ -617,7 +710,7 @@ export function FilePicker() {
                     selectionStore.clear();
                   }}
                 >
-                  <SelectTrigger className="min-w-[190px]">
+                  <SelectTrigger className="min-w-[160px] h-8 text-xs">
                     <SelectValue placeholder="Knowledge base" />
                   </SelectTrigger>
                   <SelectContent>
@@ -631,36 +724,48 @@ export function FilePicker() {
               </div>
             </div>
 
-            <Separator className="mt-5" />
-
-            <div className="flex flex-col gap-5 px-6 py-5 flex-1 min-h-0 overflow-hidden">
-              <div className="flex flex-wrap items-center gap-2 text-sm text-slate-400">
-                {breadcrumbs.map((crumb, index) => {
-                  const label =
-                    index === 0
-                      ? activeConnection?.name ?? 'Google Drive'
-                      : crumb.label;
-                  return (
-                    <div key={`${crumb.resourcePath}-${index}`} className="flex items-center gap-2">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleBreadcrumbClick(index)}
-                        className={cn(
-                          'h-auto rounded-md px-1.5 py-1 text-sm font-normal transition',
-                          index === breadcrumbs.length - 1
-                            ? 'bg-slate-100 text-slate-600 hover:bg-slate-100'
-                            : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'
-                        )}
-                      >
-                        {label}
-                      </Button>
-                      {index < breadcrumbs.length - 1 && <span>/</span>}
-                    </div>
-                  );
-                })}
-              </div>
+            <div className="flex flex-col gap-4 px-6 py-4 flex-1 min-h-0 overflow-hidden">
+              {selectedIntegration === 'google-drive' && (
+                <div className="flex flex-wrap items-center gap-2 text-sm text-slate-400">
+                  {breadcrumbs.map((crumb, index) => {
+                    const label =
+                      index === 0
+                        ? activeConnection?.name ?? 'Google Drive'
+                        : crumb.label;
+                    return (
+                      <div key={`${crumb.resourcePath}-${index}`} className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleBreadcrumbClick(index)}
+                          className={cn(
+                            'h-auto rounded-md px-1.5 py-1 text-sm font-normal transition',
+                            index === breadcrumbs.length - 1
+                              ? 'bg-slate-100 text-slate-600 hover:bg-slate-100'
+                              : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'
+                          )}
+                        >
+                          {label}
+                        </Button>
+                        {index < breadcrumbs.length - 1 && <span>/</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {selectedIntegration === 'files' && (
+                <div className="flex flex-wrap items-center gap-2 text-sm text-slate-400">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-auto rounded-md px-1.5 py-1 text-sm font-normal bg-slate-100 text-slate-600 hover:bg-slate-100"
+                  >
+                    Files
+                  </Button>
+                </div>
+              )}
 
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5">
@@ -733,16 +838,120 @@ export function FilePicker() {
                     <div className="p-5">
                       <ResourceSkeleton />
                     </div>
+                  ) : viewMode === 'grid' ? (
+                    <div className="p-5">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                        {sortedResources.map((resource) => {
+                          const isSelected = selectionStore.isSelected(resource.id);
+                          const canDelete =
+                            resource.status === 'indexed' || resource.status === 'processing';
+
+                          return (
+                            <div
+                              key={resource.id}
+                              className={cn(
+                                'group relative flex flex-col items-center p-3 rounded-lg border-2 transition-all cursor-pointer hover:bg-slate-50',
+                                isSelected
+                                  ? 'border-slate-400 bg-slate-50'
+                                  : 'border-slate-200/70 hover:border-slate-300'
+                              )}
+                              onClick={() => {
+                                if (resource.type === 'directory') {
+                                  handleEnterDirectory(resource);
+                                } else {
+                                  selectionStore.toggle(resource);
+                                }
+                              }}
+                            >
+                              <div 
+                                className="absolute top-2 left-2 z-10"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <Checkbox
+                                  checked={isSelected}
+                                  onCheckedChange={() => selectionStore.toggle(resource)}
+                                  aria-label={`Select ${resource.name}`}
+                                />
+                              </div>
+                              
+                              <div className="w-full aspect-square flex items-center justify-center mb-2 rounded-lg bg-slate-100">
+                                {resource.type === 'directory' ? (
+                                  <Folder className="h-12 w-12 text-slate-400" />
+                                ) : (
+                                  <FileText className="h-12 w-12 text-slate-400" />
+                                )}
+                              </div>
+                              
+                              <div className="w-full text-center">
+                                <p className="text-xs font-medium text-slate-700 truncate mb-1">
+                                  {resource.name}
+                                </p>
+                                <p className="text-[10px] text-slate-500">
+                                  {formatBytes(resource.size)}
+                                </p>
+                                <div className="mt-2 flex justify-center">
+                                  <StatusBadge status={resource.status} />
+                                </div>
+                              </div>
+
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant={canDelete ? 'outline' : 'secondary'}
+                                className={cn(
+                                  'w-full mt-2 text-xs h-7',
+                                  canDelete
+                                    ? 'border-red-200 bg-red-50 text-red-600 hover:bg-red-100'
+                                    : 'bg-slate-900 text-white hover:bg-slate-800'
+                                )}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleRowAction(resource);
+                                }}
+                                disabled={
+                                  (resource.type === 'directory' && resource.status === 'processing') ||
+                                  indexMutation.isPending ||
+                                  deleteMutation.isPending
+                                }
+                              >
+                                {resource.type === 'directory'
+                                  ? 'Open'
+                                  : canDelete
+                                  ? 'De-index'
+                                  : 'Index'}
+                              </Button>
+                            </div>
+                          );
+                        })}
+                        {sortedResources.length === 0 && (
+                          <div className="col-span-full py-16 text-center text-sm text-slate-500">
+                            No files in this folder.
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   ) : (
                     <Table>
                       <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-10 text-slate-400">Select</TableHead>
-                          <TableHead className="min-w-[200px]">Name</TableHead>
-                          <TableHead className="w-[180px]">Last modified</TableHead>
-                          <TableHead className="w-[90px]">Size</TableHead>
-                          <TableHead className="w-[120px]">Status</TableHead>
-                          <TableHead className="w-[100px] text-right">Action</TableHead>
+                        <TableRow className="border-b border-slate-200">
+                          <TableHead className="w-12 text-center">
+                            <span className="text-xs font-medium text-slate-500">Select</span>
+                          </TableHead>
+                          <TableHead className="min-w-[250px]">
+                            <span className="text-xs font-medium text-slate-500">Name</span>
+                          </TableHead>
+                          <TableHead className="w-[180px]">
+                            <span className="text-xs font-medium text-slate-500">Last modified</span>
+                          </TableHead>
+                          <TableHead className="w-[100px]">
+                            <span className="text-xs font-medium text-slate-500">Size</span>
+                          </TableHead>
+                          <TableHead className="w-[120px]">
+                            <span className="text-xs font-medium text-slate-500">Status</span>
+                          </TableHead>
+                          <TableHead className="w-[120px] text-right">
+                            <span className="text-xs font-medium text-slate-500">Action</span>
+                          </TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -755,54 +964,56 @@ export function FilePicker() {
                             <TableRow
                               key={resource.id}
                               data-state={isSelected ? 'selected' : undefined}
-                              className="text-sm h-12"
+                              className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors"
                             >
-                              <TableCell>
-                                <Checkbox
-                                  checked={isSelected}
-                                  onCheckedChange={() => selectionStore.toggle(resource)}
-                                  aria-label={`Select ${resource.name}`}
-                                />
+                              <TableCell className="text-center">
+                                <div className="flex items-center justify-center">
+                                  <Checkbox
+                                    checked={isSelected}
+                                    onCheckedChange={() => selectionStore.toggle(resource)}
+                                    aria-label={`Select ${resource.name}`}
+                                  />
+                                </div>
                               </TableCell>
-                              <TableCell>
+                              <TableCell className="py-3">
                                 <Button
                                   type="button"
                                   variant="ghost"
                                   onClick={() => handleEnterDirectory(resource)}
                                   disabled={resource.type !== 'directory'}
                                   className={cn(
-                                    'flex w-full items-center justify-start gap-3 rounded-lg px-2 py-1 h-auto text-left transition font-normal',
+                                    'flex items-center justify-start gap-2.5 rounded-md px-2 py-1.5 h-auto text-left transition font-normal -ml-2',
                                     resource.type === 'directory'
                                       ? 'text-slate-700 hover:bg-slate-100'
                                       : 'cursor-default text-slate-600 hover:bg-transparent'
                                   )}
                                 >
                                   {resource.type === 'directory' ? (
-                                    <Folder className="h-4 w-4 text-slate-300" />
+                                    <Folder className="h-4 w-4 text-slate-400 shrink-0" />
                                   ) : (
-                                    <FileText className="h-4 w-4 text-slate-300" />
+                                    <FileText className="h-4 w-4 text-slate-400 shrink-0" />
                                   )}
-                                  <span className="truncate">{resource.name}</span>
+                                  <span className="truncate text-sm">{resource.name}</span>
                                 </Button>
                               </TableCell>
-                              <TableCell className="text-slate-500">
+                              <TableCell className="text-sm text-slate-600 py-3">
                                 {formatDate(resource.modifiedAt)}
                               </TableCell>
-                              <TableCell className="text-slate-500">
+                              <TableCell className="text-sm text-slate-600 py-3">
                                 {formatBytes(resource.size)}
                               </TableCell>
-                              <TableCell>
+                              <TableCell className="py-3">
                                 <StatusBadge status={resource.status} />
                               </TableCell>
-                              <TableCell className="text-right">
+                              <TableCell className="text-right py-3">
                                 <Button
                                   type="button"
                                   size="sm"
-                                  variant={canDelete ? 'outline' : 'secondary'}
+                                  variant={canDelete ? 'outline' : 'default'}
                                   className={cn(
-                                    'min-w-[88px] justify-center',
+                                    'min-w-[90px] h-8 text-xs font-medium',
                                     canDelete
-                                      ? 'border-red-200 bg-red-50 text-red-600 hover:bg-red-100'
+                                      ? 'border-red-200 bg-red-50 text-red-600 hover:bg-red-100 hover:border-red-300'
                                       : 'bg-slate-900 text-white hover:bg-slate-800'
                                   )}
                                   onClick={() => handleRowAction(resource)}
