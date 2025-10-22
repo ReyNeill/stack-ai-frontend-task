@@ -87,12 +87,34 @@ interface BreadcrumbItem {
 type SortField = 'name' | 'modifiedAt';
 type SortDirection = 'asc' | 'desc';
 
-const STATUS_META: Record<ResourceStatus, { label: string; className: string }> = {
-  indexed: { label: 'Indexed', className: 'bg-emerald-100 text-emerald-700' },
-  pending: { label: 'Pending', className: 'bg-amber-100 text-amber-800' },
-  processing: { label: 'Processing', className: 'bg-amber-100 text-amber-800' },
-  error: { label: 'Error', className: 'bg-red-100 text-red-700' },
-  not_indexed: { label: 'Not indexed', className: 'bg-slate-100 text-slate-500' },
+const STATUS_META: Record<
+  ResourceStatus,
+  { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; className?: string }
+> = {
+  indexed: { 
+    label: 'Indexed', 
+    variant: 'secondary',
+    className: 'bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+  },
+  pending: { 
+    label: 'Pending', 
+    variant: 'secondary',
+    className: 'bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-100'
+  },
+  processing: { 
+    label: 'Processing', 
+    variant: 'secondary',
+    className: 'bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-100'
+  },
+  error: { 
+    label: 'Error', 
+    variant: 'destructive'
+  },
+  not_indexed: { 
+    label: 'Not indexed', 
+    variant: 'secondary',
+    className: 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-100'
+  },
 };
 
 type IntegrationItem =
@@ -176,8 +198,8 @@ function StatusBadge({ status }: { status: ResourceStatus }) {
   const meta = STATUS_META[status] ?? STATUS_META.not_indexed;
   return (
     <Badge
-      variant="secondary"
-      className={cn('rounded-md px-2 py-0.5 text-xs font-medium w-fit', meta.className)}
+      variant={meta.variant}
+      className={cn(meta.className)}
     >
       {meta.label}
     </Badge>
@@ -616,17 +638,19 @@ export function FilePicker() {
           </aside>
 
           {isSidebarCollapsed && (
-            <div className="hidden md:flex items-center py-3 px-4">
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => setIsSidebarCollapsed(false)}
-                className="hover:bg-slate-100"
-                aria-label="Expand sidebar"
-              >
-                <ArrowRightToLine className="h-4 w-4 text-slate-400" />
-              </Button>
+            <div className="hidden md:flex shrink-0 border-r border-slate-200/60 bg-slate-50/80">
+              <div className="p-6">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => setIsSidebarCollapsed(false)}
+                  className="hover:bg-slate-100"
+                  aria-label="Expand sidebar"
+                >
+                  <ArrowRightToLine className="h-4 w-4 text-slate-400" />
+                </Button>
+              </div>
             </div>
           )}
 
@@ -651,7 +675,7 @@ export function FilePicker() {
                       {selectedIntegration === 'files' ? 'Files' : 'Google Drive'}
                     </h2>
                     {selectedIntegration === 'google-drive' && (
-                      <Badge className="bg-slate-100 text-[10px] font-medium text-slate-500 px-1.5 py-0">
+                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
                         Beta
                       </Badge>
                     )}
@@ -725,8 +749,8 @@ export function FilePicker() {
             </div>
 
             <div className="flex flex-col gap-4 px-6 py-4 flex-1 min-h-0 overflow-hidden">
-              {selectedIntegration === 'google-drive' && (
-                <div className="flex flex-wrap items-center gap-2 text-sm text-slate-400">
+              {selectedIntegration === 'google-drive' && breadcrumbs.length > 1 && (
+                <div className="flex flex-wrap items-center gap-2 text-sm">
                   {breadcrumbs.map((crumb, index) => {
                     const label =
                       index === 0
@@ -740,92 +764,90 @@ export function FilePicker() {
                           size="sm"
                           onClick={() => handleBreadcrumbClick(index)}
                           className={cn(
-                            'h-auto rounded-md px-1.5 py-1 text-sm font-normal transition',
+                            'h-auto rounded-md px-2 py-1 text-xs font-medium transition',
                             index === breadcrumbs.length - 1
-                              ? 'bg-slate-100 text-slate-600 hover:bg-slate-100'
-                              : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'
+                              ? 'bg-slate-100 text-slate-700 hover:bg-slate-100'
+                              : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
                           )}
                         >
                           {label}
                         </Button>
-                        {index < breadcrumbs.length - 1 && <span>/</span>}
+                        {index < breadcrumbs.length - 1 && <span className="text-slate-400">/</span>}
                       </div>
                     );
                   })}
                 </div>
               )}
-              {selectedIntegration === 'files' && (
-                <div className="flex flex-wrap items-center gap-2 text-sm text-slate-400">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-auto rounded-md px-1.5 py-1 text-sm font-normal bg-slate-100 text-slate-600 hover:bg-slate-100"
-                  >
-                    Files
-                  </Button>
-                </div>
-              )}
 
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2.5">
-                  <Checkbox
-                    checked={allSelected}
-                    onCheckedChange={handleToggleAll}
-                    aria-label="Select all"
-                  />
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="gap-2 text-slate-500 hover:text-slate-700"
-                      onClick={() => toggleSort('name')}
-                    >
-                      <SortAsc className="h-4 w-4" />
-                      Sort by name
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="gap-2 text-slate-500 hover:text-slate-700"
-                      onClick={() => toggleSort('modifiedAt')}
-                    >
-                      <Calendar className="h-4 w-4" />
-                      Sort by date
-                    </Button>
-                    <Select
-                      value={statusFilter}
-                      onValueChange={(value) =>
-                        setStatusFilter(value as typeof statusFilter)
-                      }
-                    >
-                      <SelectTrigger className="h-8 w-[150px] justify-start rounded-full border-slate-200 bg-white px-3 text-sm font-medium text-slate-500 focus:ring-0">
-                        <SelectValue placeholder="Filter status" />
-                      </SelectTrigger>
-                      <SelectContent sideOffset={4}>
-                        <SelectItem value="all">All statuses</SelectItem>
-                        <SelectItem value="indexed">Indexed</SelectItem>
-                        <SelectItem value="processing">Processing</SelectItem>
-                        <SelectItem value="not_indexed">Not indexed</SelectItem>
-                        <SelectItem value="error">Errors</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                <div className="flex items-center gap-3">
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-slate-600 hover:text-slate-900 h-8 w-8"
+                          onClick={() => toggleSort('name')}
+                        >
+                          <SortAsc className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent sideOffset={5}>
+                        <p>Sort by name</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-slate-600 hover:text-slate-900 h-8 w-8"
+                          onClick={() => toggleSort('modifiedAt')}
+                        >
+                          <Calendar className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent sideOffset={5}>
+                        <p>Sort by date</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                  <Select
+                    value={statusFilter}
+                    onValueChange={(value) =>
+                      setStatusFilter(value as typeof statusFilter)
+                    }
+                  >
+                    <SelectTrigger className="h-8 w-[130px] border-slate-200 bg-white text-xs text-slate-600">
+                      <SelectValue placeholder="All statuses" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All statuses</SelectItem>
+                      <SelectItem value="indexed">Indexed</SelectItem>
+                      <SelectItem value="processing">Processing</SelectItem>
+                      <SelectItem value="not_indexed">Not indexed</SelectItem>
+                      <SelectItem value="error">Errors</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-                <div className="flex items-center gap-2.5">
-                  <div className="relative w-64">
-                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+                <div className="flex items-center gap-2">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
                     <Input
                       value={filterText}
                       onChange={(event) => setFilterText(event.target.value)}
                       placeholder="Search by name"
-                      className="pl-9"
+                      className="pl-9 h-8 w-64 text-xs"
                     />
                   </div>
                   <Button
                     onClick={handleIndexSelected}
                     disabled={selectionCount === 0 || indexMutation.isPending}
-                    className="gap-2"
+                    size="sm"
+                    className="h-8 text-xs"
                   >
                     Index selected ({selectionCount})
                   </Button>
@@ -934,8 +956,25 @@ export function FilePicker() {
                     <Table>
                       <TableHeader>
                         <TableRow className="border-b border-slate-200">
-                          <TableHead className="w-12 text-center">
-                            <span className="text-xs font-medium text-slate-500">Select</span>
+                          <TableHead className="w-12">
+                            <div className="flex items-center justify-center">
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <div className="flex items-center justify-center">
+                                      <Checkbox
+                                        checked={allSelected}
+                                        onCheckedChange={handleToggleAll}
+                                        aria-label="Select all"
+                                      />
+                                    </div>
+                                  </TooltipTrigger>
+                                  <TooltipContent sideOffset={5}>
+                                    <p>Select all</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            </div>
                           </TableHead>
                           <TableHead className="min-w-[250px]">
                             <span className="text-xs font-medium text-slate-500">Name</span>
@@ -949,7 +988,7 @@ export function FilePicker() {
                           <TableHead className="w-[120px]">
                             <span className="text-xs font-medium text-slate-500">Status</span>
                           </TableHead>
-                          <TableHead className="w-[120px] text-right">
+                          <TableHead className="w-[120px] text-center">
                             <span className="text-xs font-medium text-slate-500">Action</span>
                           </TableHead>
                         </TableRow>
@@ -964,9 +1003,19 @@ export function FilePicker() {
                             <TableRow
                               key={resource.id}
                               data-state={isSelected ? 'selected' : undefined}
-                              className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors"
+                              className={cn(
+                                "border-b border-slate-100 cursor-pointer transition-colors",
+                                isSelected ? 'bg-slate-50' : 'hover:bg-slate-50/50'
+                              )}
+                              onClick={(e) => {
+                                // Don't toggle if clicking on a button or interactive element
+                                if ((e.target as HTMLElement).closest('button')) {
+                                  return;
+                                }
+                                selectionStore.toggle(resource);
+                              }}
                             >
-                              <TableCell className="text-center">
+                              <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
                                 <div className="flex items-center justify-center">
                                   <Checkbox
                                     checked={isSelected}
@@ -976,36 +1025,35 @@ export function FilePicker() {
                                 </div>
                               </TableCell>
                               <TableCell className="py-3">
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  onClick={() => handleEnterDirectory(resource)}
-                                  disabled={resource.type !== 'directory'}
-                                  className={cn(
-                                    'flex items-center justify-start gap-2.5 rounded-md px-2 py-1.5 h-auto text-left transition font-normal -ml-2',
-                                    resource.type === 'directory'
-                                      ? 'text-slate-700 hover:bg-slate-100'
-                                      : 'cursor-default text-slate-600 hover:bg-transparent'
-                                  )}
-                                >
+                                <div className="flex items-center">
                                   {resource.type === 'directory' ? (
-                                    <Folder className="h-4 w-4 text-slate-400 shrink-0" />
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleEnterDirectory(resource);
+                                      }}
+                                      className="text-sm font-medium text-slate-900 hover:underline truncate"
+                                    >
+                                      {resource.name}
+                                    </button>
                                   ) : (
-                                    <FileText className="h-4 w-4 text-slate-400 shrink-0" />
+                                    <span className="text-sm font-medium text-slate-900 truncate">
+                                      {resource.name}
+                                    </span>
                                   )}
-                                  <span className="truncate text-sm">{resource.name}</span>
-                                </Button>
+                                </div>
                               </TableCell>
-                              <TableCell className="text-sm text-slate-600 py-3">
+                              <TableCell className="text-sm text-slate-900 py-3">
                                 {formatDate(resource.modifiedAt)}
                               </TableCell>
-                              <TableCell className="text-sm text-slate-600 py-3">
+                              <TableCell className="text-sm text-slate-900 py-3">
                                 {formatBytes(resource.size)}
                               </TableCell>
                               <TableCell className="py-3">
                                 <StatusBadge status={resource.status} />
                               </TableCell>
-                              <TableCell className="text-right py-3">
+                              <TableCell className="text-center py-3" onClick={(e) => e.stopPropagation()}>
                                 <Button
                                   type="button"
                                   size="sm"
