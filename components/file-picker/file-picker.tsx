@@ -602,11 +602,11 @@ export function FilePicker() {
           <div className="w-3 h-3 rounded-full bg-[#febc2e] hover:bg-[#febc2e]/80 transition-colors cursor-pointer" />
           <div className="w-3 h-3 rounded-full bg-[#28c840] hover:bg-[#28c840]/80 transition-colors cursor-pointer" />
         </div>
-        <div className="h-12 border-b border-slate-200/60 shrink-0" />
+        <div className="h-12 border-b shrink-0" />
         <div className="flex flex-1 min-h-0">
           <aside 
             className={cn(
-              "hidden border-r border-slate-200/60 bg-slate-50/80 md:flex md:flex-col overflow-hidden transition-all duration-300 ease-in-out",
+              "hidden border-r bg-slate-50/80 md:flex md:flex-col overflow-hidden transition-all duration-300 ease-in-out",
               isSidebarCollapsed ? "w-0 p-0" : "w-56 px-4 py-5"
             )}
           >
@@ -680,7 +680,7 @@ export function FilePicker() {
           </aside>
 
           <section className="flex w-full flex-col min-w-0 overflow-hidden">
-            <div className="flex items-center justify-between gap-3 px-6 py-3 border-b border-slate-200/60">
+            <div className="flex items-center justify-between gap-3 px-6 py-3 border-b">
               <div className="flex items-center gap-2">
                 <TooltipProvider>
                   <Tooltip>
@@ -1001,57 +1001,81 @@ export function FilePicker() {
                           )}
                         </div>
                       </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide">
-                    {isLoading ? (
-                      <div className="px-5 py-3">
-                        <ResourceSkeleton />
-                      </div>
-                    ) : (
-                      <div className="px-5">
-                        <Table>
-                          <TableHeader className="[&_tr]:border-b [&_tr]:border-slate-200">
-                            <TableRow className="hover:bg-transparent">
-                              <TableHead className="sticky top-0 z-10 bg-white w-12">
-                                <TooltipProvider>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <div className="flex items-center justify-center">
-                                        <Checkbox
-                                          checked={allSelected}
-                                          onCheckedChange={handleToggleAll}
-                                          aria-label="Select all"
-                                          disabled={isLoading}
-                                        />
-                                      </div>
-                                    </TooltipTrigger>
-                                    <TooltipContent sideOffset={5}>
-                                      <p>Select all</p>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
-                              </TableHead>
-                              <TableHead className="sticky top-0 z-10 bg-white">
-                                <span className="text-xs font-medium text-slate-500">Name</span>
-                              </TableHead>
-                              <TableHead className="sticky top-0 z-10 bg-white">
-                                <span className="text-xs font-medium text-slate-500">Last modified</span>
-                              </TableHead>
-                              <TableHead className="sticky top-0 z-10 bg-white">
-                                <span className="text-xs font-medium text-slate-500">Size</span>
-                              </TableHead>
-                              <TableHead className="sticky top-0 z-10 bg-white">
-                                <span className="text-xs font-medium text-slate-500">Status</span>
-                              </TableHead>
-                              <TableHead className="sticky top-0 z-10 bg-white text-center">
-                                <span className="text-xs font-medium text-slate-500">Action</span>
-                              </TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {sortedResources.map((resource) => {
+                )}
+              </div>
+            ) : (
+              <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                <div className="flex-1 overflow-y-auto scrollbar-hide">
+                  <div className="px-5 py-3">
+                    <Table>
+                      <TableHeader className="bg-white">
+                        <TableRow className="hover:bg-transparent">
+                          <TableHead className="w-12">
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <div className="flex items-center justify-center">
+                                    <Checkbox
+                                      checked={allSelected}
+                                      onCheckedChange={handleToggleAll}
+                                      aria-label="Select all"
+                                      disabled={isLoading}
+                                    />
+                                  </div>
+                                </TooltipTrigger>
+                                <TooltipContent sideOffset={5}>
+                                  <p>Select all</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </TableHead>
+                          <TableHead>
+                            <span className="text-xs font-medium text-slate-500">Name</span>
+                          </TableHead>
+                          <TableHead>
+                            <span className="text-xs font-medium text-slate-500">Last modified</span>
+                          </TableHead>
+                          <TableHead>
+                            <span className="text-xs font-medium text-slate-500">Size</span>
+                          </TableHead>
+                          <TableHead>
+                            <span className="text-xs font-medium text-slate-500">Status</span>
+                          </TableHead>
+                          <TableHead className="text-center">
+                            <span className="text-xs font-medium text-slate-500">Action</span>
+                          </TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {isLoading
+                          ? Array.from({ length: 6 }).map((_, index) => (
+                              <TableRow key={`resource-skeleton-${index}`} className="animate-pulse">
+                                <TableCell className="w-12">
+                                  <div className="flex items-center justify-center">
+                                    <Skeleton className="h-4 w-4 rounded-sm" />
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <Skeleton className="h-4 w-48" />
+                                </TableCell>
+                                <TableCell>
+                                  <Skeleton className="h-4 w-32" />
+                                </TableCell>
+                                <TableCell>
+                                  <Skeleton className="h-4 w-24" />
+                                </TableCell>
+                                <TableCell>
+                                  <Skeleton className="h-6 w-20 rounded-full" />
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  <div className="flex justify-center">
+                                    <Skeleton className="h-8 w-24 rounded-md" />
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          : sortedResources.length > 0
+                          ? sortedResources.map((resource) => {
                               const isSelected = selectionStore.isSelected(resource.id);
                               const canDelete =
                                 resource.status === 'indexed' || resource.status === 'processing';
@@ -1061,7 +1085,7 @@ export function FilePicker() {
                                   key={resource.id}
                                   data-state={isSelected ? 'selected' : undefined}
                                   className={cn(
-                                    "cursor-pointer transition-colors",
+                                    'cursor-pointer',
                                     isSelected ? 'bg-slate-50' : 'hover:bg-slate-50/50'
                                   )}
                                   onClick={(e) => {
@@ -1156,8 +1180,8 @@ export function FilePicker() {
                                   </TableCell>
                                 </TableRow>
                               );
-                            })}
-                            {sortedResources.length === 0 && !isLoading && (
+                            })
+                          : (
                               <TableRow>
                                 <TableCell
                                   colSpan={6}
@@ -1167,48 +1191,48 @@ export function FilePicker() {
                                 </TableCell>
                               </TableRow>
                             )}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    )}
+                      </TableBody>
+                    </Table>
                   </div>
-                )}
-                {selectedIntegration === 'google-drive' && breadcrumbs.length > 1 && (
-                  <div className="absolute bottom-0 left-0 right-0 z-10 bg-white/95 backdrop-blur-sm border-t border-slate-200/70 px-5 py-2.5">
-                    <Breadcrumb>
-                      <BreadcrumbList>
-                        {breadcrumbs.map((crumb, index) => {
-                          const label =
-                            index === 0
-                              ? activeConnection?.name ?? 'Google Drive'
-                              : crumb.label;
-                          const isLast = index === breadcrumbs.length - 1;
-                          
-                          return (
-                            <Fragment key={`${crumb.resourcePath}-${index}`}>
-                              <BreadcrumbItem>
-                                {isLast ? (
-                                  <BreadcrumbPage className="text-xs font-medium">
-                                    {label}
-                                  </BreadcrumbPage>
-                                ) : (
-                                  <BreadcrumbLink asChild>
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => handleBreadcrumbClick(index)}
-                                      className="h-auto rounded-md px-2 py-1 text-xs font-medium hover:bg-slate-100"
-                                    >
-                                      {label}
-                                    </Button>
-                                  </BreadcrumbLink>
-                                )}
-                              </BreadcrumbItem>
-                              {!isLast && <BreadcrumbSeparator />}
-                            </Fragment>
-                          );
-                        })}
+                </div>
+              </div>
+            )}
+            {selectedIntegration === 'google-drive' && breadcrumbs.length > 1 && (
+              <div className="border-t border-slate-200/70 bg-white/80 px-5 py-2.5 rounded-b-2xl">
+                <Breadcrumb>
+                  <BreadcrumbList>
+                    {breadcrumbs.map((crumb, index) => {
+                      const label =
+                        index === 0
+                          ? activeConnection?.name ?? 'Google Drive'
+                          : crumb.label;
+                      const isLast = index === breadcrumbs.length - 1;
+
+                      return (
+                        <Fragment key={`${crumb.resourcePath}-${index}`}>
+                          <BreadcrumbItem>
+                            {isLast ? (
+                              <BreadcrumbPage className="text-xs font-medium">
+                                {label}
+                              </BreadcrumbPage>
+                            ) : (
+                              <BreadcrumbLink asChild>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleBreadcrumbClick(index)}
+                                  className="h-auto rounded-md px-2 py-1 text-xs font-medium hover:bg-slate-100"
+                                >
+                                  {label}
+                                </Button>
+                              </BreadcrumbLink>
+                            )}
+                          </BreadcrumbItem>
+                          {!isLast && <BreadcrumbSeparator />}
+                        </Fragment>
+                      );
+                    })}
                       </BreadcrumbList>
                     </Breadcrumb>
                   </div>
@@ -1216,7 +1240,7 @@ export function FilePicker() {
               </div>
             </div>
 
-            <div className="flex items-center justify-between border-t border-slate-200/70 bg-slate-50/70 px-6 py-3.5 text-sm text-slate-500">
+            <div className="flex items-center justify-between border-t bg-slate-50/70 px-6 py-3.5 text-sm text-slate-500">
               <div>
                 {selectionCount} item{selectionCount === 1 ? '' : 's'} selected
               </div>
