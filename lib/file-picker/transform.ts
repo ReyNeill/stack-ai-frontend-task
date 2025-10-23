@@ -31,7 +31,8 @@ function extractName(path: string): string {
 function computeStatus(
   resource: StackConnectionResource,
   knowledgeBaseData?: ListKnowledgeBaseResourcesResponse,
-  indexedResourceIds?: Set<string>
+  indexedResourceIds?: Set<string>,
+  knowledgeBaseDescendants?: Map<string, ListKnowledgeBaseResourcesResponse>
 ): { status: ResourceStatus; kbEntry?: ListKnowledgeBaseResourcesResponse['data'][number] } {
   if (!knowledgeBaseData) {
     if (indexedResourceIds?.has(resource.resource_id)) {
@@ -57,11 +58,36 @@ function computeStatus(
       return { status: mappedStatus, kbEntry: match };
     }
 
-    const descendantEntries = knowledgeBaseData.data.filter((item) =>
-      normalizePath(item.inode_path.path, item.inode_type === 'directory').startsWith(
-        normalizedResourcePath
-      )
-    );
+    const descendantEntries: ListKnowledgeBaseResourcesResponse['data'] = [];
+    const seen = new Set<string>();
+
+    const addEntries = (items: ListKnowledgeBaseResourcesResponse['data']) => {
+      for (const item of items) {
+        const normalized = normalizePath(item.inode_path.path, item.inode_type === 'directory');
+        const key = `${item.resource_id ?? normalized}`;
+        if (
+          (!normalizedResourcePath || normalized.startsWith(normalizedResourcePath)) &&
+          normalized !== normalizedResourcePath &&
+          !seen.has(key)
+        ) {
+          descendantEntries.push(item);
+          seen.add(key);
+        }
+      }
+    };
+
+    if (knowledgeBaseData) {
+      addEntries(knowledgeBaseData.data);
+    }
+
+    if (knowledgeBaseDescendants) {
+      knowledgeBaseDescendants.forEach((childData, pathKey) => {
+        const normalizedKeyPath = normalizePath(pathKey, true);
+        if (!normalizedResourcePath || normalizedKeyPath.startsWith(normalizedResourcePath)) {
+          addEntries(childData.data);
+        }
+      });
+    }
 
     if (descendantEntries.length === 0) {
       if (indexedResourceIds?.has(resource.resource_id)) {
@@ -124,7 +150,8 @@ function mapKnowledgeBaseStatus(status: string | undefined): ResourceStatus {
 export function toParsedResources(
   resources: StackConnectionResource[],
   knowledgeBaseData?: ListKnowledgeBaseResourcesResponse,
-  indexedResourceIds?: Set<string>
+  indexedResourceIds?: Set<string>,
+  knowledgeBaseDescendants?: Map<string, ListKnowledgeBaseResourcesResponse>
 ): ParsedResource[] {
   return resources.map((resource) => {
     const rawPath = resource.inode_path.path;
@@ -135,7 +162,12 @@ export function toParsedResources(
 
     const fullPath = normalizedFullPath ? `/${normalizedFullPath}` : '/';
 
-    const { status, kbEntry } = computeStatus(resource, knowledgeBaseData, indexedResourceIds);
+    const { status, kbEntry } = computeStatus(
+      resource,
+      knowledgeBaseData,
+      indexedResourceIds,
+      knowledgeBaseDescendants
+    );
 
     return {
       id: resource.resource_id,

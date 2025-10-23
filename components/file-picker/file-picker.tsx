@@ -505,6 +505,45 @@ export function FilePicker() {
     }
     return new Set(activeKnowledgeBaseSummary.connection_source_ids);
   }, [activeKnowledgeBaseSummary]);
+
+  const updateKnowledgeBaseSummary = (updater: (ids: string[]) => string[] | undefined) => {
+    if (!activeKnowledgeBaseId) return;
+    queryClient.setQueryData<ListKnowledgeBasesResponse>(['knowledge-bases'], (current) => {
+      if (!current) return current;
+
+      const next: ListKnowledgeBasesResponse = { ...current };
+      const segments: Array<keyof ListKnowledgeBasesResponse> = ['admin', 'editor', 'viewer'];
+
+      for (const segment of segments) {
+        const list = current[segment];
+        if (!Array.isArray(list)) continue;
+        const index = list.findIndex((item) => item.knowledge_base_id === activeKnowledgeBaseId);
+        if (index === -1) continue;
+
+        const target = list[index];
+        const updatedIds = updater([...(target.connection_source_ids ?? [])]);
+        if (!updatedIds) {
+          return next;
+        }
+
+        const updatedItem: StackKnowledgeBaseSummary = {
+          ...target,
+          connection_source_ids: updatedIds,
+        };
+
+        next[segment] = [
+          ...list.slice(0, index),
+          updatedItem,
+          ...list.slice(index + 1),
+        ];
+
+        break;
+      }
+
+      return next;
+    });
+  };
+
   const activeConnection = useMemo(() => {
     if (!connectionsQuery.data) return undefined;
     return (
@@ -538,6 +577,29 @@ export function FilePicker() {
     enabled: Boolean(activeKnowledgeBaseId),
   });
 
+  const knowledgeBaseDescendants = useMemo(() => {
+    if (!activeKnowledgeBaseId) {
+      return new Map<string, ListKnowledgeBaseResourcesResponse>();
+    }
+
+    void knowledgeBaseResourcesQuery.dataUpdatedAt;
+
+    const entries = queryClient.getQueriesData<ListKnowledgeBaseResourcesResponse>({
+      queryKey: ['knowledge-base-resources', activeKnowledgeBaseId],
+    });
+
+    const map = new Map<string, ListKnowledgeBaseResourcesResponse>();
+    for (const [key, data] of entries) {
+      const queryKey = key as unknown as [string, string, string];
+      const [, , path] = queryKey;
+      if (path != null && data) {
+        map.set(path, data);
+      }
+    }
+
+    return map;
+  }, [queryClient, activeKnowledgeBaseId, knowledgeBaseResourcesQuery.dataUpdatedAt]);
+
   const isStatusLoading =
     selectedIntegration === 'google-drive' && knowledgeBaseResourcesQuery.isLoading;
 
@@ -548,13 +610,15 @@ export function FilePicker() {
     return toParsedResources(
       connectionResourcesQuery.data?.data ?? [],
       knowledgeBaseResourcesQuery.data,
-      indexedResourceIds
+      indexedResourceIds,
+      knowledgeBaseDescendants
     );
   }, [
     selectedIntegration,
     connectionResourcesQuery.data,
     knowledgeBaseResourcesQuery.data,
     indexedResourceIds,
+    knowledgeBaseDescendants,
   ]);
 
   const filteredResources = useMemo(() => {
@@ -656,6 +720,15 @@ export function FilePicker() {
         setLoadingResourceId(resourceIds[0]);
       }
 
+       updateKnowledgeBaseSummary((ids) => {
+         if (!activeKnowledgeBaseId) return undefined;
+         const next = new Set(ids);
+         for (const id of resourceIds) {
+           next.add(id);
+         }
+         return Array.from(next);
+       });
+
       await queryClient.cancelQueries({
         queryKey: ['knowledge-base-resources', activeKnowledgeBaseId, knowledgeBasePath],
       });
@@ -706,7 +779,7 @@ export function FilePicker() {
         );
       }
 
-      return { previous };
+      return { previous, resourceIds };
     },
     onError: (_error, _variables, context) => {
       if (context?.previous) {
@@ -715,9 +788,21 @@ export function FilePicker() {
           context.previous
         );
       }
+      const attemptedIds = context?.resourceIds ?? [];
+      if (attemptedIds.length > 0) {
+        updateKnowledgeBaseSummary((ids) => {
+          if (!activeKnowledgeBaseId) return undefined;
+          const next = ids.filter((id) => !attemptedIds.includes(id));
+          return next;
+        });
+      }
       toast.error('Failed to start indexing. Please try again.');
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      if (data?.knowledge_base?.connection_source_ids) {
+        const ids = data.knowledge_base.connection_source_ids;
+        updateKnowledgeBaseSummary(() => ids);
+      }
       toast.success('Indexing started');
       selectionStore.clear();
       queryClient.invalidateQueries({
@@ -736,14 +821,20 @@ export function FilePicker() {
           `/api/stack/knowledge-bases/${activeKnowledgeBaseId}/resources?resourcePath=${encodeURIComponent(resource.fullPath)}`
         );
       }
-      await apiPatch(
+      return apiPatch<{ knowledge_base: StackKnowledgeBaseDetail; connection_source_ids: string[] }>(
         `/api/stack/knowledge-bases/${activeKnowledgeBaseId}/connection-sources`,
         { resourceId: resource.id, action: 'remove' }
       );
     },
     onMutate: async (resource) => {
       setLoadingResourceId(resource.id);
-      
+
+      updateKnowledgeBaseSummary((ids) => {
+        if (!activeKnowledgeBaseId) return undefined;
+        const next = ids.filter((id) => id !== resource.id);
+        return next;
+      });
+
       await queryClient.cancelQueries({
         queryKey: ['knowledge-base-resources', activeKnowledgeBaseId, knowledgeBasePath],
       });
@@ -769,7 +860,7 @@ export function FilePicker() {
         );
       }
 
-      return { previous };
+      return { previous, resourceId: resource.id };
     },
     onError: (_error, _variables, context) => {
       if (context?.previous) {
@@ -778,9 +869,21 @@ export function FilePicker() {
           context.previous
         );
       }
+      if (context?.resourceId) {
+        updateKnowledgeBaseSummary((ids) => {
+          if (!activeKnowledgeBaseId) return undefined;
+          const next = new Set(ids);
+          next.add(context.resourceId!);
+          return Array.from(next);
+        });
+      }
       toast.error('Failed to de-index resource.');
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      if (data?.connection_source_ids) {
+        const ids = data.connection_source_ids;
+        updateKnowledgeBaseSummary(() => ids);
+      }
       toast.success('Resource removed from knowledge base');
       queryClient.invalidateQueries({
         queryKey: ['knowledge-base-resources', activeKnowledgeBaseId],
@@ -1230,13 +1333,15 @@ export function FilePicker() {
                                   <p className="text-[10px] text-slate-500">
                                     {formatBytes(resource.size)}
                                   </p>
-                                  <div className="mt-2 flex justify-center">
-                                    {isStatusLoading ? (
-                                      <Skeleton className="h-6 w-20 rounded-full" />
-                                    ) : (
-                                      <StatusBadge status={resource.status} />
-                                    )}
-                                  </div>
+                                  {resource.type !== 'directory' && (
+                                    <div className="mt-2 flex justify-center">
+                                      {isStatusLoading ? (
+                                        <Skeleton className="h-6 w-20 rounded-full" />
+                                      ) : (
+                                        <StatusBadge status={resource.status} />
+                                      )}
+                                    </div>
+                                  )}
                                 </div>
 
                                 <TooltipProvider>
@@ -1475,7 +1580,9 @@ export function FilePicker() {
                                     {formatBytes(resource.size)}
                                   </TableCell>
                                   <TableCell>
-                                    {isStatusLoading ? (
+                                    {resource.type === 'directory' ? (
+                                      <span className="text-xs text-slate-400">—</span>
+                                    ) : isStatusLoading ? (
                                       <Skeleton className="h-6 w-20 rounded-full" />
                                     ) : (
                                       <StatusBadge status={resource.status} />
