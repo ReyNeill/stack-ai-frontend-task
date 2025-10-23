@@ -32,10 +32,13 @@ function computeStatus(
   resource: StackConnectionResource,
   knowledgeBaseData?: ListKnowledgeBaseResourcesResponse,
   indexedResourceIds?: Set<string>,
-  knowledgeBaseDescendants?: Map<string, ListKnowledgeBaseResourcesResponse>
+  knowledgeBaseDescendants?: Map<string, ListKnowledgeBaseResourcesResponse>,
+  pendingResourceIds?: Set<string>
 ): { status: ResourceStatus; kbEntry?: ListKnowledgeBaseResourcesResponse['data'][number] } {
+  const isPendingLocally = pendingResourceIds?.has(resource.resource_id) ?? false;
+
   if (!knowledgeBaseData) {
-    if (indexedResourceIds?.has(resource.resource_id)) {
+    if (indexedResourceIds?.has(resource.resource_id) || isPendingLocally) {
       return { status: 'processing' };
     }
     return { status: 'not_indexed' };
@@ -90,7 +93,7 @@ function computeStatus(
     }
 
     if (descendantEntries.length === 0) {
-      if (indexedResourceIds?.has(resource.resource_id)) {
+      if (indexedResourceIds?.has(resource.resource_id) || isPendingLocally) {
         return { status: 'processing' };
       }
       return { status: 'not_indexed' };
@@ -112,7 +115,7 @@ function computeStatus(
       return { status: 'indexed' };
     }
 
-    if (indexedResourceIds?.has(resource.resource_id)) {
+    if (indexedResourceIds?.has(resource.resource_id) || isPendingLocally) {
       return { status: 'processing' };
     }
 
@@ -124,13 +127,24 @@ function computeStatus(
   );
 
   if (!match) {
-    if (indexedResourceIds?.has(resource.resource_id)) {
+    if (indexedResourceIds?.has(resource.resource_id) || isPendingLocally) {
       return { status: 'processing' };
     }
     return { status: 'not_indexed' };
   }
 
-  return { status: mapKnowledgeBaseStatus(match.status), kbEntry: match };
+  const mappedStatus = mapKnowledgeBaseStatus(match.status);
+  
+  // handle transient errors: if resource was just indexed (in indexedResourceIds)
+  // but backend returns 'error', treat it as 'processing' to avoid flickering error state
+  if (
+    mappedStatus === 'error' &&
+    (indexedResourceIds?.has(resource.resource_id) || isPendingLocally)
+  ) {
+    return { status: 'processing', kbEntry: match };
+  }
+
+  return { status: mappedStatus, kbEntry: match };
 }
 
 /**
@@ -163,7 +177,8 @@ export function toParsedResources(
   resources: StackConnectionResource[],
   knowledgeBaseData?: ListKnowledgeBaseResourcesResponse,
   indexedResourceIds?: Set<string>,
-  knowledgeBaseDescendants?: Map<string, ListKnowledgeBaseResourcesResponse>
+  knowledgeBaseDescendants?: Map<string, ListKnowledgeBaseResourcesResponse>,
+  pendingResourceIds?: Set<string>
 ): ParsedResource[] {
   return resources.map((resource) => {
     const rawPath = resource.inode_path.path;
@@ -178,7 +193,8 @@ export function toParsedResources(
       resource,
       knowledgeBaseData,
       indexedResourceIds,
-      knowledgeBaseDescendants
+      knowledgeBaseDescendants,
+      pendingResourceIds
     );
 
     return {

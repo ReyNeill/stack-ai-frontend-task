@@ -1,22 +1,15 @@
 'use client';
 
 import Image from 'next/image';
-import { Activity, useMemo, useState, Fragment, useEffect } from 'react';
-import type { LucideIcon } from 'lucide-react';
+import { Activity, useMemo, useState, Fragment, useEffect, useCallback } from 'react';
 import {
   Calendar,
-  FileText,
   Folder,
-  Globe,
   Grid3x3,
-  Layers,
   List,
-  Loader2,
-  Play,
   RefreshCcw,
   Search,
   SortAsc,
-  Text,
 } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -27,14 +20,12 @@ import {
   ListConnectionsResponse,
   ListKnowledgeBaseResourcesResponse,
   ListKnowledgeBasesResponse,
-  StackConnectionResource,
   StackKnowledgeBaseSummary,
   StackKnowledgeBaseDetail,
 } from '@/lib/stack/types';
-import { cn, formatBytes, formatDate } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 import {
   ParsedResource,
-  ResourceStatus,
 } from '@/lib/file-picker/types';
 import {
   resourcePathToKnowledgeBasePath,
@@ -42,7 +33,6 @@ import {
 } from '@/lib/file-picker/transform';
 import { useSelectionStore } from '@/hooks/use-selection-store';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -53,8 +43,6 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
-import { Skeleton } from '@/components/ui/skeleton';
-import { StatusBadge } from './status-badge';
 import { ResourceListView } from './resource-list-view';
 import { ResourceGridView } from './resource-grid-view';
 import { ResourceSkeleton } from './resource-skeleton';
@@ -63,14 +51,12 @@ import {
   INTEGRATIONS,
   SAMPLE_LOCAL_FILES,
   PREFETCH_TOAST_CACHE,
-  type IntegrationItem,
 } from './constants';
 import {
   flattenKnowledgeBases,
   findKnowledgeBaseSummary,
   isImageFile,
   isVideoFile,
-  type KnowledgeBaseOption,
 } from './utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
@@ -119,6 +105,28 @@ export function FilePicker() {
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [loadingResourceId, setLoadingResourceId] = useState<string | null>(null);
   const [prefetchResource, setPrefetchResource] = useState<ParsedResource | null>(null);
+  const [pendingResourceIds, setPendingResourceIds] = useState<string[]>([]);
+
+  const pendingResourceIdSet = useMemo(
+    () => new Set(pendingResourceIds),
+    [pendingResourceIds]
+  );
+
+  const addPendingResourceIds = useCallback((ids: string[]) => {
+    if (ids.length === 0) return;
+    setPendingResourceIds((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) {
+        next.add(id);
+      }
+      return Array.from(next);
+    });
+  }, []);
+
+  const removePendingResourceIds = useCallback((ids: string[]) => {
+    if (ids.length === 0) return;
+    setPendingResourceIds((prev) => prev.filter((id) => !ids.includes(id)));
+  }, []);
 
   /**
    * load folder contents on hover (<Activity>)
@@ -298,7 +306,8 @@ export function FilePicker() {
       connectionResourcesQuery.data?.data ?? [],
       knowledgeBaseResourcesQuery.data,
       indexedResourceIds,
-      knowledgeBaseDescendants
+      knowledgeBaseDescendants,
+      pendingResourceIdSet
     );
   }, [
     selectedIntegration,
@@ -306,6 +315,7 @@ export function FilePicker() {
     knowledgeBaseResourcesQuery.data,
     indexedResourceIds,
     knowledgeBaseDescendants,
+    pendingResourceIdSet,
   ]);
 
   const filteredResources = useMemo(() => {
@@ -422,6 +432,8 @@ export function FilePicker() {
         setLoadingResourceId(resourceIds[0]);
       }
 
+      addPendingResourceIds(resourceIds);
+
       // optimistically add resources to knowledge base summary
       // this updates the global indexed state immediately
       updateKnowledgeBaseSummary((ids) => {
@@ -505,19 +517,80 @@ export function FilePicker() {
           const next = ids.filter((id) => !attemptedIds.includes(id));
           return next;
         });
+        removePendingResourceIds(attemptedIds);
       }
       toast.error('Failed to start indexing. Please try again.');
     },
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
+      const { resourceIds } = variables;
+
       if (data?.knowledge_base?.connection_source_ids) {
         const ids = data.knowledge_base.connection_source_ids;
-        updateKnowledgeBaseSummary(() => ids);
+        updateKnowledgeBaseSummary(() => {
+          // merge server snapshot with requested ids to avoid losing optimistic state
+          const mergedIds = new Set(ids);
+          for (const resourceId of resourceIds) {
+            mergedIds.add(resourceId);
+          }
+          return Array.from(mergedIds);
+        });
+      } else if (resourceIds.length > 0) {
+        updateKnowledgeBaseSummary((existing) => {
+          // fallback: ensure optimistic ids stick around if response omitted them
+          const mergedIds = new Set(existing);
+          for (const resourceId of resourceIds) {
+            mergedIds.add(resourceId);
+          }
+          return Array.from(mergedIds);
+        });
       }
       toast.success('Indexing started');
       selectionStore.clear();
-      queryClient.invalidateQueries({
-        queryKey: ['knowledge-base-resources', activeKnowledgeBaseId],
-      });
+      
+      // poll for status updates until resources appear as indexed or processing
+      // this prevents premature refetch from overwriting optimistic "processing" state
+      let pollAttempts = 0;
+      const maxAttempts = 10;
+      
+      const pollInterval = setInterval(async () => {
+        pollAttempts++;
+        
+        // refetch to check current status
+        const result = await queryClient.fetchQuery({
+          queryKey: ['knowledge-base-resources', activeKnowledgeBaseId, knowledgeBasePath],
+          queryFn: () =>
+            apiGet<ListKnowledgeBaseResourcesResponse>(
+              `/api/stack/knowledge-bases/${activeKnowledgeBaseId}/resources?resourcePath=${encodeURIComponent(knowledgeBasePath)}`
+            ),
+        });
+
+        const resolvedIds: string[] = [];
+        for (const id of resourceIds) {
+          const match = result?.data.find((item) => item.resource_id === id);
+          if (match && match.status && match.status !== 'not_indexed') {
+            resolvedIds.push(id);
+          }
+        }
+
+        if (resolvedIds.length > 0) {
+          removePendingResourceIds(resolvedIds);
+        }
+        
+        // check if any of the indexed resources now show as processing or indexed
+        const allProcessing = resourceIds.every((id) => {
+          const match = result?.data.find((item) => item.resource_id === id);
+          return match && (match.status === 'processing' || match.status === 'indexed' || match.status === 'pending');
+        });
+        
+        if (allProcessing || pollAttempts >= maxAttempts) {
+          removePendingResourceIds(resourceIds);
+          clearInterval(pollInterval);
+          // final invalidation to ensure UI is in sync
+          queryClient.invalidateQueries({
+            queryKey: ['knowledge-base-resources', activeKnowledgeBaseId],
+          });
+        }
+      }, 2000); // poll every 2 seconds
     },
     onSettled: () => {
       setLoadingResourceId(null);
@@ -538,6 +611,8 @@ export function FilePicker() {
     },
     onMutate: async (resource) => {
       setLoadingResourceId(resource.id);
+
+      removePendingResourceIds([resource.id]);
 
       updateKnowledgeBaseSummary((ids) => {
         if (!activeKnowledgeBaseId) return undefined;
