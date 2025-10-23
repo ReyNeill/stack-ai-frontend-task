@@ -5,6 +5,13 @@ import type {
 
 export type ResourceKind = 'file' | 'directory';
 
+export type ResourcePreviewType = 'image' | 'video' | 'text';
+
+export interface ResourcePreview {
+  type: ResourcePreviewType;
+  src: string;
+}
+
 export interface ParsedResource {
   id: string;
   type: ResourceKind;
@@ -16,6 +23,7 @@ export interface ParsedResource {
   knowledgeBaseStatus?: StackKnowledgeBaseResource['status'];
   knowledgeBasePath?: string;
   raw: StackConnectionResource;
+  preview?: ResourcePreview;
 }
 
 export type ResourceStatus = 'indexed' | 'pending' | 'processing' | 'error' | 'not_indexed';

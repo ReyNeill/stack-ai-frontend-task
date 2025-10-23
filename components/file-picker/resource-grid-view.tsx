@@ -30,6 +30,7 @@ interface ResourceGridViewProps {
   isImageFile: (fileName: string) => boolean;
   isVideoFile: (fileName: string) => boolean;
   renderSkeleton: () => React.ReactElement;
+  onOpenPreview?: (resource: ParsedResource) => void;
 }
 
 /**
@@ -50,6 +51,7 @@ export function ResourceGridView({
   isImageFile,
   isVideoFile,
   renderSkeleton,
+  onOpenPreview,
 }: ResourceGridViewProps) {
   return (
     <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide">
@@ -96,6 +98,16 @@ export function ResourceGridView({
                       onEnterDirectory(resource);
                     } else {
                       onToggle(resource);
+                    }
+                  }}
+                  onDoubleClick={(event) => {
+                    event.stopPropagation();
+                    if (resource.type === 'directory') {
+                      onEnterDirectory(resource);
+                      return;
+                    }
+                    if (resource.preview) {
+                      onOpenPreview?.(resource);
                     }
                   }}
                 >
@@ -239,4 +251,3 @@ export function ResourceGridView({
     </div>
   );
 }
-

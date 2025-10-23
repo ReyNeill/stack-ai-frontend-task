@@ -37,6 +37,7 @@ interface ResourceListViewProps {
   onEnterDirectory: (resource: ParsedResource) => void;
   onRowAction: (resource: ParsedResource) => void;
   onPrefetch?: (resource: ParsedResource) => void;
+  onOpenPreview?: (resource: ParsedResource) => void;
 }
 
 /**
@@ -57,6 +58,7 @@ export function ResourceListView({
   onEnterDirectory,
   onRowAction,
   onPrefetch,
+  onOpenPreview,
 }: ResourceListViewProps) {
   return (
     <Table containerClassName="overflow-visible">
@@ -210,6 +212,15 @@ export function ResourceListView({
                     }
                     onToggle(resource);
                   }}
+                  onDoubleClick={() => {
+                    if (resource.type === 'directory') {
+                      onEnterDirectory(resource);
+                      return;
+                    }
+                    if (resource.preview) {
+                      onOpenPreview?.(resource);
+                    }
+                  }}
                 >
                   <TableCell className="w-12" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center justify-center">
@@ -285,4 +296,3 @@ export function ResourceListView({
     </Table>
   );
 }
-

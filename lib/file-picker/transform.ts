@@ -2,7 +2,7 @@ import type {
   ListKnowledgeBaseResourcesResponse,
   StackConnectionResource,
 } from '@/lib/stack/types';
-import type { ParsedResource, ResourceStatus } from './types';
+import type { ParsedResource, ResourcePreview, ResourceStatus } from './types';
 
 function normalizePath(path: string | undefined, isDirectory: boolean): string {
   if (!path) {
@@ -26,6 +26,37 @@ function extractName(path: string): string {
   if (!path) return 'Untitled';
   const segments = path.split('/').filter(Boolean);
   return segments[segments.length - 1] ?? path;
+}
+
+function extractPreview(resource: StackConnectionResource): ResourcePreview | undefined {
+  const metadata = resource.user_metadata ?? {};
+  const previewCandidate = metadata.preview as unknown;
+
+  if (previewCandidate && typeof previewCandidate === 'object') {
+    const candidate = previewCandidate as Record<string, unknown>;
+    const type = candidate.type;
+    const src = candidate.src;
+    if (
+      (type === 'image' || type === 'video' || type === 'text') &&
+      typeof src === 'string' &&
+      src.length > 0
+    ) {
+      return { type, src };
+    }
+  }
+
+  const fallbackType = metadata.preview_type;
+  const fallbackSrc = metadata.preview_src;
+
+  if (
+    (fallbackType === 'image' || fallbackType === 'video' || fallbackType === 'text') &&
+    typeof fallbackSrc === 'string' &&
+    fallbackSrc.length > 0
+  ) {
+    return { type: fallbackType, src: fallbackSrc };
+  }
+
+  return undefined;
 }
 
 function computeStatus(
@@ -197,6 +228,8 @@ export function toParsedResources(
       pendingResourceIds
     );
 
+    const preview = extractPreview(resource);
+
     return {
       id: resource.resource_id,
       type: resource.inode_type,
@@ -209,6 +242,7 @@ export function toParsedResources(
       knowledgeBaseStatus: kbEntry?.status,
       knowledgeBasePath: kbEntry?.inode_path.path,
       raw: resource,
+      preview,
     };
   });
 }

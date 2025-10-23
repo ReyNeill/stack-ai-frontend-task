@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { Activity, useMemo, useState, Fragment, useEffect, useCallback } from 'react';
+import { Activity, useMemo, useState, Fragment, useEffect, useCallback, useRef } from 'react';
 import {
   Calendar,
   Folder,
@@ -10,6 +10,7 @@ import {
   RefreshCcw,
   Search,
   SortAsc,
+  Loader2,
 } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -105,6 +106,11 @@ export function FilePicker() {
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [loadingResourceId, setLoadingResourceId] = useState<string | null>(null);
   const [prefetchResource, setPrefetchResource] = useState<ParsedResource | null>(null);
+  const [previewResource, setPreviewResource] = useState<ParsedResource | null>(null);
+  const [previewContent, setPreviewContent] = useState<string | null>(null);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const previewResourceIdRef = useRef<string | null>(null);
   const [pendingResourceIds, setPendingResourceIds] = useState<string[]>([]);
 
   const pendingResourceIdSet = useMemo(
@@ -162,6 +168,58 @@ export function FilePicker() {
     setPrefetchResource((prev) => (prev?.id === resource.id ? prev : resource));
   };
 
+  const closePreview = useCallback(() => {
+    previewResourceIdRef.current = null;
+    setPreviewResource(null);
+    setPreviewContent(null);
+    setPreviewError(null);
+    setIsPreviewLoading(false);
+  }, []);
+
+  const handleOpenPreview = useCallback(
+    async (resource: ParsedResource) => {
+      if (resource.type === 'directory' || !resource.preview) {
+        return;
+      }
+
+      previewResourceIdRef.current = resource.id;
+      setPreviewResource(resource);
+      setPreviewContent(null);
+      setPreviewError(null);
+
+      if (resource.preview.type === 'text') {
+        setIsPreviewLoading(true);
+        try {
+          const previewUrl = resource.preview.src.startsWith('http')
+            ? resource.preview.src
+            : encodeURI(resource.preview.src);
+          const response = await fetch(previewUrl);
+          if (!response.ok) {
+            throw new Error(`Failed to load preview (status ${response.status})`);
+          }
+          const text = await response.text();
+          if (previewResourceIdRef.current !== resource.id) {
+            return;
+          }
+          setPreviewContent(text);
+        } catch (error) {
+          if (previewResourceIdRef.current !== resource.id) {
+            return;
+          }
+          console.error(error);
+          setPreviewError('Unable to load preview.');
+        } finally {
+          if (previewResourceIdRef.current === resource.id) {
+            setIsPreviewLoading(false);
+          }
+        }
+      } else {
+        setIsPreviewLoading(false);
+      }
+    },
+    []
+  );
+
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       setIsMounted(true);
@@ -171,6 +229,21 @@ export function FilePicker() {
       clearTimeout(timeoutId);
     };
   }, []);
+
+  useEffect(() => {
+    if (!previewResource) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        closePreview();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [previewResource, closePreview]);
 
   const connectionsQuery = useQuery<ListConnectionsResponse>({
     queryKey: ['connections'],
@@ -297,6 +370,12 @@ export function FilePicker() {
 
   const isStatusLoading =
     selectedIntegration === 'google-drive' && knowledgeBaseResourcesQuery.isLoading;
+
+  const previewSource = previewResource?.preview?.src ?? previewResource?.fullPath ?? '';
+  const encodedPreviewSource =
+    previewSource && !previewSource.startsWith('http')
+      ? encodeURI(previewSource)
+      : previewSource;
 
   const parsedResources = useMemo(() => {
     if (selectedIntegration === 'files') {
@@ -1016,6 +1095,9 @@ export function FilePicker() {
                     isImageFile={isImageFile}
                     isVideoFile={isVideoFile}
                     renderSkeleton={() => <ResourceSkeleton />}
+                    onOpenPreview={
+                      selectedIntegration === 'files' ? handleOpenPreview : undefined
+                    }
                   />
             ) : (
               <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide px-5">
@@ -1032,6 +1114,9 @@ export function FilePicker() {
                   onEnterDirectory={handleEnterDirectory}
                   onRowAction={handleRowAction}
                   onPrefetch={startPrefetch}
+                  onOpenPreview={
+                    selectedIntegration === 'files' ? handleOpenPreview : undefined
+                  }
                 />
               </div>
             )}
@@ -1126,6 +1211,103 @@ export function FilePicker() {
         </div>
       </div>
       </main>
+      {previewResource && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-6"
+          onClick={closePreview}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="relative w-full max-w-3xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="overflow-hidden rounded-[28px] border border-white/25 bg-white/95 shadow-2xl">
+              <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-100/90 px-5 py-3">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      closePreview();
+                    }}
+                    aria-label="Close preview"
+                    className="h-3 w-3 rounded-full bg-[#ff5f57] transition-colors hover:bg-[#ff5f57]/80 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    disabled
+                    aria-label="Minimize disabled"
+                    className="h-3 w-3 rounded-full bg-[#febc2e] opacity-40"
+                  />
+                  <button
+                    type="button"
+                    disabled
+                    aria-label="Zoom disabled"
+                    className="h-3 w-3 rounded-full bg-[#28c840] opacity-40"
+                  />
+                </div>
+                <div className="flex-1 text-center">
+                  <span className="block truncate text-sm font-semibold text-slate-700">
+                    {previewResource.name}
+                  </span>
+                  {previewResource.preview?.type && (
+                    <span className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
+                      {previewResource.preview.type}
+                    </span>
+                  )}
+                </div>
+                <div className="w-12" />
+              </div>
+              <div className="bg-white/95 px-6 py-6">
+                {isPreviewLoading ? (
+                  <div className="flex h-[60vh] flex-col items-center justify-center gap-3 text-slate-500">
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                    <span className="text-sm font-medium">Loading preview...</span>
+                  </div>
+                ) : previewError ? (
+                  <div className="flex h-[60vh] items-center justify-center text-sm text-slate-500">
+                    {previewError}
+                  </div>
+                ) : previewResource.preview?.type === 'image' ? (
+                  <div className="relative h-[60vh] w-full overflow-hidden rounded-2xl bg-slate-900">
+                    <Image
+                      src={previewSource || '/file.svg'}
+                      alt={previewResource.name}
+                      fill
+                      className="object-contain"
+                      sizes="(max-width: 768px) 90vw, (max-width: 1024px) 70vw, 50vw"
+                    />
+                  </div>
+                ) : previewResource.preview?.type === 'video' ? (
+                  <div className="overflow-hidden rounded-2xl bg-black">
+                    <video
+                      key={encodedPreviewSource}
+                      src={encodedPreviewSource}
+                      className="w-full max-h-[60vh]"
+                      controls
+                      autoPlay
+                      muted
+                      playsInline
+                      preload="metadata"
+                    />
+                  </div>
+                ) : previewResource.preview?.type === 'text' ? (
+                  <ScrollArea className="h-[60vh] rounded-2xl border border-slate-200 bg-slate-50">
+                    <pre className="whitespace-pre-wrap break-words p-5 font-mono text-sm text-slate-800">
+                      {previewContent ?? 'No content available.'}
+                    </pre>
+                  </ScrollArea>
+                ) : (
+                  <div className="flex h-[60vh] items-center justify-center text-sm text-slate-500">
+                    Preview not available.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {selectedIntegration === 'google-drive' &&
         prefetchResource &&
         activeConnectionId && (

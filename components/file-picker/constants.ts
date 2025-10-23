@@ -1,6 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import { Folder, Globe, Layers, Text } from 'lucide-react';
-import { ParsedResource } from '@/lib/file-picker/types';
+import { ParsedResource, ResourcePreview } from '@/lib/file-picker/types';
 import { StackConnectionResource } from '@/lib/stack/types';
 
 export type IntegrationItem =
@@ -8,7 +8,7 @@ export type IntegrationItem =
   | { id: string; label: string; count?: number; type: 'image'; src: string };
 
 export const INTEGRATIONS: IntegrationItem[] = [
-  { id: 'files', label: 'Files', count: 4, type: 'icon', icon: Folder },
+  { id: 'files', label: 'Files', count: 3, type: 'icon', icon: Folder },
   { id: 'websites', label: 'Websites', type: 'icon', icon: Globe },
   { id: 'text', label: 'Text', type: 'icon', icon: Text },
   { id: 'confluence', label: 'Confluence', type: 'icon', icon: Layers },
@@ -28,8 +28,9 @@ function createStubStackResource(params: {
   type: 'file' | 'directory';
   modifiedAt: string;
   size?: number;
+  preview?: ResourcePreview;
 }): StackConnectionResource {
-  const { id, fullPath, type, modifiedAt, size } = params;
+  const { id, fullPath, type, modifiedAt, size, preview } = params;
 
   return {
     knowledge_base_id: '',
@@ -42,7 +43,11 @@ function createStubStackResource(params: {
     dataloader_metadata: {
       last_modified_at: modifiedAt,
     },
-    user_metadata: {},
+    user_metadata: preview
+      ? {
+          preview,
+        }
+      : {},
     inode_id: null,
     content_hash: undefined,
     content_mime: undefined,
@@ -66,55 +71,62 @@ export const SAMPLE_LOCAL_FILES: ParsedResource[] = [
       type: 'file',
       modifiedAt: '2024-01-15T10:30:00Z',
       size: 2458640,
+      preview: {
+        type: 'image',
+        src: '/Team Photo.jpg',
+      },
     }),
+    preview: {
+      type: 'image',
+      src: '/Team Photo.jpg',
+    },
   },
   {
     id: 'local-2',
-    name: 'Marketing Strategy.pdf',
+    name: 'readme.txt',
     type: 'file',
-    fullPath: '/Marketing Strategy.pdf',
-    size: 2097152,
-    modifiedAt: '2024-01-14T15:45:00Z',
-    status: 'indexed',
+    fullPath: '/readme.txt',
+    size: 8192,
+    modifiedAt: '2024-01-20T09:00:00Z',
+    status: 'not_indexed',
     raw: createStubStackResource({
       id: 'local-2',
-      fullPath: '/Marketing Strategy.pdf',
+      fullPath: '/readme.txt',
       type: 'file',
-      modifiedAt: '2024-01-14T15:45:00Z',
-      size: 2097152,
+      modifiedAt: '2024-01-20T09:00:00Z',
+      size: 8192,
+      preview: {
+        type: 'text',
+        src: '/readme.txt',
+      },
     }),
+    preview: {
+      type: 'text',
+      src: '/readme.txt',
+    },
   },
   {
     id: 'local-3',
-    name: 'Team Meeting Notes.docx',
+    name: 'task-stack-ai-demo.mov',
     type: 'file',
-    fullPath: '/Team Meeting Notes.docx',
-    size: 524288,
-    modifiedAt: '2024-01-13T09:20:00Z',
+    fullPath: '/task-stack-ai-demo.mov',
+    size: 15728640,
+    modifiedAt: '2024-01-19T13:30:00Z',
     status: 'not_indexed',
     raw: createStubStackResource({
       id: 'local-3',
-      fullPath: '/Team Meeting Notes.docx',
+      fullPath: '/task-stack-ai-demo.mov',
       type: 'file',
-      modifiedAt: '2024-01-13T09:20:00Z',
-      size: 524288,
-    }),
-  },
-  {
-    id: 'local-4',
-    name: 'Demo Video.mp4',
-    type: 'file',
-    fullPath: '/Demo Video.mp4',
-    size: 15728640,
-    modifiedAt: '2024-01-12T14:00:00Z',
-    status: 'indexed',
-    raw: createStubStackResource({
-      id: 'local-4',
-      fullPath: '/Demo Video.mp4',
-      type: 'file',
-      modifiedAt: '2024-01-12T14:00:00Z',
+      modifiedAt: '2024-01-19T13:30:00Z',
       size: 15728640,
+      preview: {
+        type: 'video',
+        src: '/task-stack-ai-demo.mov',
+      },
     }),
+    preview: {
+      type: 'video',
+      src: '/task-stack-ai-demo.mov',
+    },
   },
 ];
-
