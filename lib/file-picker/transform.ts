@@ -133,13 +133,25 @@ function computeStatus(
   return { status: mapKnowledgeBaseStatus(match.status), kbEntry: match };
 }
 
+/**
+ * status mapping: Stack AI Backend → UI States
+ * 
+ * maps Stack AI's knowledge base statuses to our simpler UI states:
+ * - 'indexed' to green badge (ready to use)
+ * - 'processing'/'pending' to amber badge (in progress)
+ * - 'error' to red badge (failed)
+ * - undefined/other to gray badge (not indexed)
+ * 
+ * note: we merge 'processing' and 'pending' because they both indicate
+ * "work in progress" from the user's perspective.
+ */
 function mapKnowledgeBaseStatus(status: string | undefined): ResourceStatus {
   switch (status) {
     case 'indexed':
       return 'indexed';
     case 'processing':
     case 'pending':
-      return 'processing';
+      return 'processing'; // combine these for simpler UI
     case 'error':
       return 'error';
     default:

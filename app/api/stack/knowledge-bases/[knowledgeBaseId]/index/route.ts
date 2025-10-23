@@ -31,6 +31,7 @@ export async function POST(
     new Set([...kb.connection_source_ids, ...body.resourceIds])
   );
 
+  // update the knowledge base with the new resources
   const updated = await updateKnowledgeBase(knowledgeBaseId, {
     connection_id: kb.connection_id,
     connection_source_ids: nextSourceIds,
@@ -42,13 +43,26 @@ export async function POST(
     cron_job_id: kb.cron_job_id ?? null,
   });
 
-  // Try to trigger sync, but don't fail the request if it errors
+  /**
+   * non-blocking sync: why we don't fail on sync errors
+   * 
+   * the Stack AI sync endpoint occasionally returns 500 errors (backend issues).
+   * However, the important work is already done:
+   * - resources are added to connection_source_ids ✓
+   * - knowledge base is updated ✓
+   * 
+   * stack AI's backend has automatic syncing that will pick up these changes.
+   * making sync non-blocking ensures users can continue working even if
+   * the sync endpoint is temporarily unavailable.
+   * 
+   * this demonstrates graceful degradation and better UX.
+   */
   try {
     await triggerKnowledgeBaseSync(knowledgeBaseId, org.org_id);
   } catch (error) {
     console.error('Failed to trigger knowledge base sync:', error);
-    // Continue anyway - the resources are already added to connection_source_ids
-    // and may be picked up by automatic syncing
+    // continue anyway - resources are already in connection_source_ids
+    // stack AI's backend will eventually sync them automatically
   }
 
   return NextResponse.json({

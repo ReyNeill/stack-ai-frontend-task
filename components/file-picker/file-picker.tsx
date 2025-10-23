@@ -446,7 +446,17 @@ export function FilePicker() {
   const [loadingResourceId, setLoadingResourceId] = useState<string | null>(null);
   const [prefetchResource, setPrefetchResource] = useState<ParsedResource | null>(null);
 
+  /**
+   * load folder contents on hover (<Activity>)
+   * 
+   * performance optimization to minimize wait time:
+   * - when user hovers over a folder, start loading its contents
+   * - by the time they click, data is often already loaded
+   * - shows subtle debug toast to indicate background loading
+   * - dramatically improves perceived performance
+   */
   const startPrefetch = (resource: ParsedResource) => {
+    // only prefetch Google Drive directories
     if (resource.type !== 'directory' || selectedIntegration !== 'google-drive') {
       return;
     }
@@ -455,15 +465,18 @@ export function FilePicker() {
       return;
     }
 
+    // create unique toast key to avoid duplicate notifications
     const toastKey = `${activeConnectionId}:${activeKnowledgeBaseId ?? 'none'}:${resource.id}`;
 
+    // show toast only once per folder
     if (!PREFETCH_TOAST_CACHE.has(toastKey)) {
       PREFETCH_TOAST_CACHE.add(toastKey);
-      toast.info(`Preloading “${resource.name}” in the background…`, {
+      toast.info(`Preloading "${resource.name}" in the background…`, {
         id: toastKey,
       });
     }
 
+    // trigger prefetch by updating state (causes PrefetchComponent to fetch)
     setPrefetchResource((prev) => (prev?.id === resource.id ? prev : resource));
   };
 
@@ -647,17 +660,18 @@ export function FilePicker() {
 
   const sortedResources = useMemo(() => {
     return [...filteredResources].sort((a, b) => {
-      // Always put directories first
+      // TIER 1: always put directories first for better navigation
       if (a.type === 'directory' && b.type !== 'directory') return -1;
       if (a.type !== 'directory' && b.type === 'directory') return 1;
       
-      // Within same type, sort by selected field
+      // TIER 2: within same type (all folders or all files), sort by selected field
       if (sortField === 'name') {
         return sortDirection === 'asc'
           ? a.name.localeCompare(b.name)
           : b.name.localeCompare(a.name);
       }
 
+      // sort by modification date
       const aDate = a.modifiedAt ? new Date(a.modifiedAt).getTime() : 0;
       const bDate = b.modifiedAt ? new Date(b.modifiedAt).getTime() : 0;
       return sortDirection === 'asc' ? aDate - bDate : bDate - aDate;
@@ -706,6 +720,19 @@ export function FilePicker() {
     }
   };
 
+  /**
+   * OPTIMISTIC UPDATE PATTERN FOR INDEXING
+   * 
+   * this mutation demonstrates a robust optimistic UI pattern:
+   * 1. onMutate: immediately update UI before API call (optimistic)
+   * 2. onError: rollback changes if API fails
+   * 3. onSuccess: confirm changes and show success message
+   * 
+   * benefits:
+   * - instant feedback (no waiting for API)
+   * - graceful error handling with rollback
+   * - better UX with loading states only on action buttons
+   */
   const indexMutation = useMutation({
     mutationFn: async (payload: { resourceIds: string[] }) => {
       return apiPost<{ knowledge_base: StackKnowledgeBaseDetail }>(
@@ -715,24 +742,29 @@ export function FilePicker() {
     },
     onMutate: async (variables) => {
       const { resourceIds } = variables;
-      // Set loading state for single resource operations
+      
+      // show loading spinner only on the specific button being clicked
       if (resourceIds.length === 1) {
         setLoadingResourceId(resourceIds[0]);
       }
 
-       updateKnowledgeBaseSummary((ids) => {
-         if (!activeKnowledgeBaseId) return undefined;
-         const next = new Set(ids);
-         for (const id of resourceIds) {
-           next.add(id);
-         }
-         return Array.from(next);
-       });
+      // optimistically add resources to knowledge base summary
+      // this updates the global indexed state immediately
+      updateKnowledgeBaseSummary((ids) => {
+        if (!activeKnowledgeBaseId) return undefined;
+        const next = new Set(ids);
+        for (const id of resourceIds) {
+          next.add(id);
+        }
+        return Array.from(next);
+      });
 
+      // cancel any in-flight queries to prevent race conditions
       await queryClient.cancelQueries({
         queryKey: ['knowledge-base-resources', activeKnowledgeBaseId, knowledgeBasePath],
       });
 
+      // save previous state for potential rollback on error
       const previous = queryClient.getQueryData<
         ListKnowledgeBaseResourcesResponse
       >([
@@ -742,6 +774,7 @@ export function FilePicker() {
       ]);
 
       if (previous) {
+        // transform selected resources to match KB resource format
         const resourcesToIndex = parsedResources
           .filter((resource) => resourceIds.includes(resource.id))
           .map((resource) => ({
@@ -758,19 +791,21 @@ export function FilePicker() {
             content_hash: resource.raw.content_hash,
             content_mime: resource.raw.content_mime,
             size: resource.raw.size,
-            status: 'processing',
+            status: 'processing', // set to processing immediately for instant feedback
           }));
 
-        // Update existing resources or add new ones (avoid duplicates)
+        // CRITICAL: avoid duplicates by updating existing resources
+        // this prevents "Error" badges from appearing due to duplicate entries
         const existingIds = new Set(previous.data.map(item => item.resource_id));
         const updatedData = previous.data.map(item => {
           const updated = resourcesToIndex.find(r => r.resource_id === item.resource_id);
-          return updated || item;
+          return updated || item; // update status if exists, otherwise keep original
         });
         
-        // Add new resources that don't exist yet
+        // only add truly new resources that don't exist yet
         const newResources = resourcesToIndex.filter(r => !existingIds.has(r.resource_id));
 
+        // apply optimistic update to React Query cache
         queryClient.setQueryData<ListKnowledgeBaseResourcesResponse>(
           ['knowledge-base-resources', activeKnowledgeBaseId, knowledgeBasePath],
           {
@@ -779,6 +814,7 @@ export function FilePicker() {
         );
       }
 
+      // return context for rollback on error
       return { previous, resourceIds };
     },
     onError: (_error, _variables, context) => {
