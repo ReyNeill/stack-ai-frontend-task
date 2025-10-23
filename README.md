@@ -1,232 +1,55 @@
-# Stack AI Knowledge Base File Picker
+# stack ai knowledge base file picker
 
-A Next.js 16 application that mirrors Stack AI's Google Drive picker experience. It lets you browse a connected drive, select files or folders, and orchestrate indexing or de-indexing operations on an existing knowledge base with optimistic UI updates.
+this is the requested little app, a take on stack ai’s google drive picker. next.js 16, react 19 with activity based pre-fetches, previews, custom indexing, etc
 
-## Features
+## why it feels the way it does
 
-- **Drive navigation** – Lazy-load folder contents, breadcrumb navigation, and skeleton placeholders keep navigation responsive.
-- **Selection intelligence** – Multi-select with duplicate prevention (parents remove nested selections) and quick clear actions.
-- **Indexing workflow** – Optimistic status updates when adding resources to a knowledge base, including background sync triggers.
-- **De-indexing** – Remove previously indexed files with instant UI rollback and connection source cleanup.
-- **Status visibility** – Badge indicators for `indexed`, `processing`, `error`, and `not indexed` states per resource.
-- **Productivity helpers** – Inline search, sort-by-name/date toggles, and keyboard-friendly controls keep the UI snappy.
+- drive navigation stays light: lazy folder fetches, breadcrumbs, skeletons, and hover prefetching keep you moving without waiting.
+- selection is smarter than it looks: picking a parent folder quietly drops any nested picks so we don’t spam the api.
+- indexing and de-indexing are optimistic: the ui flips to “processing” instantly, then reconciles with the backend after a short poll.
+- local “files” mode is playful: team photo, readme.txt, and the demo .mov preview inline so you can double-click and smile.
 
-## Tech Stack
+## stack under the hood
 
-- **Framework**: Next.js 16 (App Router) + React 19
-- **Styling**: Tailwind CSS (utility-first, Tailwind v4 syntax)
-- **Data & State**: TanStack Query for server state, Zustand for selection bookkeeping
-- **UI**: Lightweight Shadcn-inspired primitives, Sonner toasts, Lucide icons
-- **API layer**: Server-side proxy routes with Supabase-authenticated calls to the Stack AI REST API
+- **framework**: next.js 16 (app router) + react 19
+- **styling**: tailwind css v4 classes layered with a few custom utility flourishes
+- **data/state**: tanstack query manages server state; zustand keeps selection tidy
+- **ui glue**: shadcn-flavored primitives, sonner toasts, lucide icons, and a bit of motion
+- **api proxy**: next.js route handlers fetch supabase tokens, call stack ai’s rest api, and cache tokens defensively
 
-## Getting Started
 
-1. **Install dependencies**
+## how the ui ticks
 
-   ```bash
-   npm install
-   ```
+- **proxy routes** (`/app/api/stack/*`) fetch a supabase access token, call stack ai, and quietly refresh tokens before they expire.
+- **filepicker** consumes those routes via tanstack query, layering optimistic cache updates, polling, and invalidation.
+- **selection store** (zustand) makes sure picking a folder prunes its children so payloads stay small.
+- **index/de-index loops** update `connection_source_ids`, flip items into a local “processing” set, and poll the knowledge base until the backend agrees.
 
-2. **Configure environment variables**
+## design decisions that matter
 
-   Copy `.env.example` to `.env.local` and fill in the values:
+### optimistic ui everywhere
 
-   ```bash
-   cp .env.example .env.local
-   ```
+waiting for a roundtrip is a buzzkill. each mutation uses `onMutate` to stash previous state, updates the cache instantly, then rolls back if the api complains. to avoid flicker we also keep a `pendingResourceIds` set so anything mid-flight still shows as “processing”.
 
-   | Variable | Description |
-   | --- | --- |
-   | `STACK_SUPABASE_URL` | Supabase auth base (`https://sb.stack-ai.com`). |
-   | `STACK_SUPABASE_ANON_KEY` | Provided anon key for token exchange. |
-   | `STACK_API_BASE_URL` | REST API root (`https://api.stack-ai.com`). |
-   | `STACK_AUTH_EMAIL` | Provided Stack AI email (`stackaitest@gmail.com`). |
-   | `STACK_AUTH_PASSWORD` | **Replace `changeme` with the supplied password** (`!z4ZnxkyLYs#vR`). |
+### no duplicate ghosts
 
-   > **Note:** Keep `.env.local` out of version control. All server routes read from `process.env`, so the password never reaches the browser.
+before we touch the cache we check existing resource ids. if something is already there we update its status instead of pushing a duplicate row. fewer “error” badges, calmer users.
 
-3. **Run the dev server**
+### non-blocking sync
 
-   ```bash
-   npm run dev
-   ```
+stack ai’s sync endpoint occasionally throws a 500, so we treat it as “best effort”: wrap it in `try/catch`, log the failure, but keep going since the important bit—updating `connection_source_ids`—already happened.
 
-   Visit `http://localhost:3000` to use the file picker.
+### folders first, always
 
-## Useful Commands
+sorting keeps directories on top, then applies your chosen field (name or modified date). it mirrors the muscle memory from finder/explorer.
 
-| Command | Description |
-| --- | --- |
-| `npm run dev` | Start the development server. |
-| `npm run lint` | Lint the project with ESLint. |
-| `npm run build` | Build for production (requires environment variables). |
-| `npm run start` | Run the production build locally. |
+### prefetch on hover
 
-To run `npm run build` locally without editing your shell environment, prefix the command with the necessary variables:
+hovering a folder kicks off a background fetch. by the time you click, data is ready and the ui stays snappy. there’s even a subtle toast to let you know we’re preloading.
 
-```bash
-STACK_SUPABASE_URL=... STACK_SUPABASE_ANON_KEY=... STACK_API_BASE_URL=... \
-STACK_AUTH_EMAIL=... STACK_AUTH_PASSWORD=... npm run build
-```
+### local previews that feel like macos
 
-## How It Works
+double-clicking a local file opens a glassy preview window with the familiar three dots. the red one closes, the yellow/green stay disabled. text pulls content via `fetch`, images/video render inline (the .mov autoplays, muted, with controls).
 
-- **Server-side proxy**: `/app/api/stack/*` routes fetch a Supabase access token, call Stack AI endpoints, and cache tokens with automatic refresh.
-- **Client UI**: The `FilePicker` component consumes those API routes via TanStack Query, layering optimistic updates and background invalidation for a smooth experience.
-- **Selection model**: A small Zustand store tracks selections across navigation, pruning descendants when a folder is selected to avoid redundant indexing payloads.
-- **Index/de-index flows**: Indexing updates the knowledge base's `connection_source_ids`, triggers a sync, and marks UI rows as `processing`. De-indexing deletes resources and prunes the source list before re-syncing.
 
-## Architecture & Design Decisions
-
-### 1. Optimistic UI Pattern
-
-**Problem**: Waiting for API responses creates a sluggish experience.
-
-**Solution**: Implement optimistic updates using React Query's `onMutate`, `onError`, and `onSuccess` lifecycle:
-
-```typescript
-onMutate: async (variables) => {
-  // 1. Cancel in-flight queries to prevent race conditions
-  await queryClient.cancelQueries({ queryKey: ['resources'] });
-  
-  // 2. Save current state for rollback
-  const previous = queryClient.getQueryData(['resources']);
-  
-  // 3. Optimistically update UI immediately
-  queryClient.setQueryData(['resources'], (old) => [...old, newResource]);
-  
-  return { previous }; // Context for rollback
-},
-onError: (_error, _variables, context) => {
-  // Rollback on error
-  queryClient.setQueryData(['resources'], context.previous);
-  toast.error('Failed to index. Please try again.');
-},
-onSuccess: () => {
-  // Confirm and invalidate to fetch fresh data
-  queryClient.invalidateQueries({ queryKey: ['resources'] });
-}
-```
-
-**Benefits**:
-- Instant visual feedback
-- Graceful error handling with automatic rollback
-- Users can continue working immediately
-
-### 2. Duplicate Prevention Strategy
-
-**Problem**: Re-indexing a resource created duplicate entries showing "Error" badges.
-
-**Solution**: Check for existing resources before optimistic update:
-
-```typescript
-// Check what already exists
-const existingIds = new Set(previous.data.map(item => item.resource_id));
-
-// Update existing resources (change status)
-const updatedData = previous.data.map(item => {
-  const updated = resourcesToIndex.find(r => r.resource_id === item.resource_id);
-  return updated || item;
-});
-
-// Only add truly new resources
-const newResources = resourcesToIndex.filter(r => !existingIds.has(r.resource_id));
-```
-
-### 3. Non-Blocking Sync Endpoint
-
-**Problem**: Stack AI's `/knowledge_bases/sync/trigger` endpoint returns 500 errors intermittently.
-
-**Solution**: Make sync call non-blocking:
-
-```typescript
-try {
-  await triggerKnowledgeBaseSync(knowledgeBaseId, org.org_id);
-} catch (error) {
-  console.error('Sync failed:', error);
-  // Continue anyway - resources are already in connection_source_ids
-  // Stack AI's backend will pick them up automatically
-}
-```
-
-**Why this works**:
-- Resources are already added to `connection_source_ids` (the important part)
-- Stack AI has automatic background syncing
-- Users can continue working without interruption
-- Demonstrates graceful degradation
-
-### 4. Folders-First Sorting
-
-**Problem**: Mixed folders and files make navigation confusing.
-
-**Solution**: Two-tier sorting algorithm:
-
-```typescript
-sort((a, b) => {
-  // Tier 1: Directories always first (like Finder/Explorer)
-  if (a.type === 'directory' && b.type !== 'directory') return -1;
-  if (a.type !== 'directory' && b.type === 'directory') return 1;
-  
-  // Tier 2: Sort by user's selected field within each tier
-  return sortByField(a, b);
-});
-```
-
-This mimics native file explorer behavior for intuitive navigation.
-
-### 5. Prefetching Strategy
-
-**Problem**: Clicking folders shows loading states, breaking flow.
-
-**Solution**: Prefetch folder contents on hover:
-
-```typescript
-<div onMouseEnter={() => startPrefetch(folder)}>
-  {/* Folder item */}
-</div>
-```
-
-### 6. Sticky Table Headers
-
-**Challenge**: Shadcn's `<Table>` wraps content in a div with `overflow-x-auto`, breaking sticky positioning.
-
-**Solution**: Override with `containerClassName="overflow-visible"`:
-
-```tsx
-<Table containerClassName="overflow-visible">
-  <TableHeader className="sticky top-0 z-30 bg-white">
-```
-
-The scroll container is moved to a parent div, allowing headers to stick properly.
-
-## Edge Cases Handled
-
-1. **De-indexing while processing**: Updates status immediately, backend reconciles
-2. **Network failures**: Automatic rollback with error toasts
-3. **Stale data**: React Query auto-invalidates after mutations
-4. **Large folders**: Lazy loading prevents fetching entire tree
-5. **Concurrent mutations**: Query cancellation prevents race conditions
-6. **Token expiration**: Automatic refresh with retry logic
-
-## Performance Optimizations
-
-- ✅ **Lazy loading**: Only fetch current folder (not entire tree)
-- ✅ **Memoization**: `useMemo` for expensive computations (sorting, filtering)
-- ✅ **Prefetching**: Load folder contents on hover
-- ✅ **Optimistic updates**: No waiting for API responses
-- ✅ **Skeletons over spinners**: Better perceived performance
-- ✅ **Component splitting**: Reduced bundle size and faster initial load
-- ✅ **Debounced search**: Prevents excessive API calls
-
-## Future Enhancements
-
-- Create or rename knowledge bases directly from the picker
-- Surface richer metadata (owners, share status) and column customization
-- Add tests (unit + playthrough) around selection logic and optimistic flows
-- Support additional providers beyond Google Drive
-- Virtual scrolling for folders with 1000+ items
-- Keyboard navigation (arrow keys, shortcuts)
-
-## License
-
-The provided credentials and assets belong to Stack AI for take-home evaluation. Please do not redistribute.
+thanks for reading—have fun indexing!
