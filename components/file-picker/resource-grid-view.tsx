@@ -22,7 +22,7 @@ interface ResourceGridViewProps {
   selectedIntegration: string;
   loadingResourceId: string | null;
   isStatusLoading: boolean;
-  isSelected: (id: string) => boolean;
+  isSelected: (resource: ParsedResource) => boolean;
   onToggle: (resource: ParsedResource) => void;
   onEnterDirectory: (resource: ParsedResource) => void;
   onRowAction: (resource: ParsedResource) => void;
@@ -61,7 +61,7 @@ export function ResourceGridView({
         <div className="p-5">
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
             {sortedResources.map((resource) => {
-              const selected = isSelected(resource.id);
+              const selected = isSelected(resource);
               const isDirectory = resource.type === 'directory';
               const displayName = isDirectory ? `${resource.name}/` : resource.name;
               const canDelete =

@@ -1,6 +1,5 @@
 'use client';
 
-import { Fragment } from 'react';
 import { Loader2 } from 'lucide-react';
 import {
   Table,
@@ -31,7 +30,7 @@ interface ResourceListViewProps {
   selectedIntegration: string;
   isSidebarCollapsed: boolean;
   loadingResourceId: string | null;
-  isSelected: (id: string) => boolean;
+  isSelected: (resource: ParsedResource) => boolean;
   onToggle: (resource: ParsedResource) => void;
   onToggleAll: (checked: CheckedState) => void;
   onEnterDirectory: (resource: ParsedResource) => void;
@@ -131,7 +130,7 @@ export function ResourceListView({
             ))
           : sortedResources.length > 0
           ? sortedResources.map((resource) => {
-              const selected = isSelected(resource.id);
+              const selected = isSelected(resource);
               const canDelete =
                 resource.status === 'indexed' || resource.status === 'processing';
               const isDirectory = resource.type === 'directory';

@@ -343,6 +343,23 @@ export function FilePicker() {
         `/api/stack/knowledge-bases/${activeKnowledgeBaseId}/resources?resourcePath=${encodeURIComponent(knowledgeBasePath)}`
       ),
     enabled: Boolean(activeKnowledgeBaseId),
+    refetchInterval: (data) => {
+      if (!activeKnowledgeBaseId || selectedIntegration !== 'google-drive') {
+        return false;
+      }
+
+      const hasPendingRequests = pendingResourceIds.length > 0;
+      const hasProcessingStatuses = data?.data.some((item) =>
+        item.status === 'processing' || item.status === 'pending'
+      ) ?? false;
+
+      if (!hasPendingRequests && !hasProcessingStatuses) {
+        return false;
+      }
+
+      return 4000; // poll every 4s while work is in-flight
+    },
+    refetchIntervalInBackground: true,
   });
 
   const knowledgeBaseDescendants = useMemo(() => {
@@ -444,7 +461,7 @@ export function FilePicker() {
   const selectionCount = selectionStore.items.size;
   const allSelected =
     sortedResources.length > 0 &&
-    sortedResources.every((resource) => selectionStore.isSelected(resource.id));
+    sortedResources.every((resource) => selectionStore.isSelected(resource));
 
   const toggleSort = (field: SortField) => {
     setSortField(field);
@@ -1087,7 +1104,7 @@ export function FilePicker() {
                     selectedIntegration={selectedIntegration}
                     loadingResourceId={loadingResourceId}
                     isStatusLoading={isStatusLoading}
-                    isSelected={(id) => selectionStore.isSelected(id)}
+                    isSelected={(resource) => selectionStore.isSelected(resource)}
                     onToggle={(resource) => selectionStore.toggle(resource)}
                     onEnterDirectory={handleEnterDirectory}
                     onRowAction={handleRowAction}
@@ -1108,7 +1125,7 @@ export function FilePicker() {
                   selectedIntegration={selectedIntegration}
                   isSidebarCollapsed={isSidebarCollapsed}
                   loadingResourceId={loadingResourceId}
-                  isSelected={(id) => selectionStore.isSelected(id)}
+                  isSelected={(resource) => selectionStore.isSelected(resource)}
                   onToggle={(resource) => selectionStore.toggle(resource)}
                   onToggleAll={handleToggleAll}
                   onEnterDirectory={handleEnterDirectory}
