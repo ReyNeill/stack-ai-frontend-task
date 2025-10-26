@@ -343,13 +343,14 @@ export function FilePicker() {
         `/api/stack/knowledge-bases/${activeKnowledgeBaseId}/resources?resourcePath=${encodeURIComponent(knowledgeBasePath)}`
       ),
     enabled: Boolean(activeKnowledgeBaseId),
-    refetchInterval: (data) => {
+    refetchInterval: (query) => {
       if (!activeKnowledgeBaseId || selectedIntegration !== 'google-drive') {
         return false;
       }
 
       const hasPendingRequests = pendingResourceIds.length > 0;
-      const hasProcessingStatuses = data?.data.some((item) =>
+      const queryData = query.state.data;
+      const hasProcessingStatuses = queryData?.data.some((item) =>
         item.status === 'processing' || item.status === 'pending'
       ) ?? false;
 

@@ -49,7 +49,7 @@ export const useSelectionStore = create<SelectionState>((set, get) => ({
       }
 
       if (hasDirectoryCoverage(state.items, resource)) {
-        return undefined;
+        return state;
       }
 
       const existing = Array.from(state.items.values());
